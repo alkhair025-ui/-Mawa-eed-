@@ -3,6 +3,7 @@ export interface Business {
   slug: string;
   name: string;
   industry: string;
+  industry_custom_name?: string;
   template_id: string;
   phone: string;
   email: string;
@@ -13,6 +14,8 @@ export interface Business {
   primary_color: string;
   secondary_color: string;
   description: string;
+  currency?: string;
+  ai_generated?: boolean;
   trial_start: string;
   trial_end: string;
   subscription_status: string;
@@ -29,7 +32,9 @@ export interface Service {
   price: number;
   currency: string;
   category: string;
-  image_url: string;
+  location_type?: 'branch' | 'online' | 'home_visit' | 'phone';
+  custom_fields?: { name: string; required: boolean; type: 'text' | 'number' | 'file' }[];
+  image_url?: string;
 }
 
 export interface Staff {
@@ -73,6 +78,6 @@ export interface TemplateConfig {
   logoDefault: string;
   badgeText: string;
   description: string;
-  sampleServices: { title: string; price: number; duration: number; category: string }[];
+  sampleServices: { title: string; price: number; duration: number; category: string; location_type?: string }[];
   sampleStaff: { name: string; role: string; avatar: string }[];
 }

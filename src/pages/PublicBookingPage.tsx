@@ -8,13 +8,11 @@ import {
   CheckCircle2, 
   Sparkles, 
   MapPin, 
-  ShieldCheck, 
   ChevronRight, 
-  Check, 
-  Share2,
-  CalendarPlus,
-  MessageCircle,
-  Star
+  Video,
+  Home,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { Business, Service, Staff } from '../types';
 import WhatsAppHelper from '../components/WhatsAppHelper';
@@ -75,18 +73,18 @@ export default function PublicBookingPage() {
           setBusiness({
             id: 'demo_fallback',
             slug: slug,
-            name: 'صالون الفخامة والروعة',
-            industry: 'barber',
-            template_id: 'luxury-dark',
+            name: 'متجر الحجوزات والخدمات المباشرة',
+            industry: 'custom',
+            template_id: 'universal-open',
             phone: '+966551234567',
-            email: 'info@salon.sa',
-            address: 'شارع التخصصي، حي العليا',
+            email: 'info@store.sa',
+            address: 'طريق الملك فهد',
             city: 'الرياض',
-            logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200&fit=crop',
-            cover_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop',
             primary_color: '#0f172a',
             secondary_color: '#d97706',
-            description: 'أفضل تجربة عناية وحلاقة للرجل العصري.',
+            logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200&fit=crop',
+            cover_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop',
+            description: 'احجز موعدك بكل سهولة مع أفضل المختصين.',
             trial_start: '',
             trial_end: '',
             subscription_status: 'trialing',
@@ -94,12 +92,12 @@ export default function PublicBookingPage() {
           });
 
           setServices([
-            { id: 1, business_id: 'demo', title: 'حلاقة شعر احترافية + تصفيف VIP', price: 90, duration_min: 45, category: 'شعر', currency: 'SAR', description: 'تصفيف وقص احترافي', image_url: '' },
-            { id: 2, business_id: 'demo', title: 'تشذيب وتحديد اللحية بالفوتة الساخنة', price: 60, duration_min: 30, category: 'لحية', currency: 'SAR', description: 'عناية فائقة', image_url: '' }
+            { id: 1, business_id: 'demo', title: 'حجز جلسة / خدمة احترافية', price: 150, duration_min: 60, category: 'عامة', currency: 'SAR', description: 'تأكيد فوري للحجز', image_url: '', location_type: 'branch' },
+            { id: 2, business_id: 'demo', title: 'استشارة أونلاين عبر الزوم', price: 200, duration_min: 45, category: 'أونلاين', currency: 'SAR', description: 'رابط الزوم يرسل بعد الحجز', image_url: '', location_type: 'online' }
           ]);
 
           setStaff([
-            { id: 101, business_id: 'demo', name: 'الكابتن طارق السوري', role: 'خبير التصفيف والعناية باللحية', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop', phone: '', is_active: true }
+            { id: 101, business_id: 'demo', name: 'أ. أحمد علي', role: 'مختص ومستشار الخدمة', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop', phone: '', is_active: true }
           ]);
         }
       } catch (err) {
@@ -158,11 +156,15 @@ export default function PublicBookingPage() {
     );
   }
 
+  // Dynamic Theme Colors
+  const primaryColor = business?.primary_color || '#0f172a';
+  const secondaryColor = business?.secondary_color || '#d97706';
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans dir-rtl pb-20">
       
-      {/* Branded Header Banner */}
-      <div className="relative h-60 sm:h-72 overflow-hidden">
+      {/* Branded Header Banner with Custom Theme Colors */}
+      <div className="relative h-60 sm:h-72 overflow-hidden border-b border-slate-800">
         <img 
           src={business?.cover_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop'} 
           alt={business?.name} 
@@ -237,16 +239,40 @@ export default function PublicBookingPage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
-                        {service.category}
+                        {service.category || 'عامة'}
                       </span>
                       <span className="text-xs text-slate-400">{service.duration_min} دقيقة</span>
                     </div>
+
                     <h3 className="font-bold text-white text-base mb-1">{service.title}</h3>
+
+                    {/* Location Badge */}
+                    <div className="mb-2">
+                      {service.location_type === 'online' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                          <Video className="w-3 h-3" />
+                          <span>أونلاين عبر الاتصال/الزوم</span>
+                        </span>
+                      )}
+                      {service.location_type === 'home_visit' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          <Home className="w-3 h-3" />
+                          <span>زيارة في موقعك/المنزل</span>
+                        </span>
+                      )}
+                      {(!service.location_type || service.location_type === 'branch') && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
+                          <MapPin className="w-3 h-3 text-amber-400" />
+                          <span>حضوري بالفرع</span>
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-xs text-slate-400 mb-3">{service.description}</p>
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="font-black text-amber-400 text-lg">{service.price} ر.س</span>
+                    <span className="font-black text-amber-400 text-lg">{service.price} {service.currency || business?.currency || 'SAR'}</span>
                     <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
                       <span>اختيار</span>
                       <ChevronRight className="w-4 h-4" />
@@ -310,7 +336,7 @@ export default function PublicBookingPage() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
                 <h2 className="font-bold text-lg text-white">اختر التاريخ والوقت وأدخل بياناتك</h2>
-                <p className="text-xs text-slate-400">الخدمة: {selectedService?.title} ({selectedService?.price} ر.س)</p>
+                <p className="text-xs text-slate-400">الخدمة: {selectedService?.title} ({selectedService?.price} {selectedService?.currency || business?.currency || 'SAR'})</p>
               </div>
               <button type="button" onClick={() => setStep(2)} className="text-xs text-slate-400 hover:text-white">تغيير</button>
             </div>
@@ -429,7 +455,7 @@ export default function PublicBookingPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">الإجمالي:</span>
-                <strong className="text-amber-400 font-bold text-sm">{confirmedBooking.price} ر.س</strong>
+                <strong className="text-amber-400 font-bold text-sm">{confirmedBooking.price} {business?.currency || 'SAR'}</strong>
               </div>
             </div>
 

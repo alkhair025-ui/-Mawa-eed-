@@ -1,30 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { 
   Calendar, 
   Clock, 
   Users, 
   Layers, 
-  BarChart3, 
   Settings, 
   Plus, 
   ExternalLink, 
   QrCode, 
-  Check, 
-  X, 
-  Edit, 
   Trash2, 
   Sparkles, 
-  Phone, 
   DollarSign,
   TrendingUp,
-  MessageCircle,
-  AlertCircle
+  MapPin,
+  Video,
+  Home,
+  FileJson,
+  Palette,
+  Eye,
+  Check
 } from 'lucide-react';
-import { Business, Service, Staff, Appointment } from '../types';
+import { Business, Service, Staff, Appointment, TemplateConfig } from '../types';
+import { TEMPLATES } from '../data/initialData';
 import TrialBanner from '../components/TrialBanner';
 import QRCodeModal from '../components/QRCodeModal';
 import WhatsAppHelper from '../components/WhatsAppHelper';
+import TemplateImportExportModal from '../components/TemplateImportExportModal';
 import Navbar from '../components/Navbar';
 
 export default function MerchantDashboard() {
@@ -36,20 +38,24 @@ export default function MerchantDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [stats, setStats] = useState<any>(null);
 
-  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments' | 'services' | 'staff' | 'hours' | 'branding' | 'trial'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments' | 'services' | 'staff' | 'branding' | 'trial'>('calendar');
   const [loading, setLoading] = useState(true);
 
   // Modals & Forms
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
 
-  // New Service Form
+  // Flexible New Service Form
   const [newServiceTitle, setNewServiceTitle] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('100');
-  const [newServiceDuration, setNewServiceDuration] = useState('30');
+  const [newServiceCurrency, setNewServiceCurrency] = useState('SAR');
+  const [newServiceDuration, setNewServiceDuration] = useState('45');
   const [newServiceCategory, setNewServiceCategory] = useState('عامة');
+  const [newServiceLocationType, setNewServiceLocationType] = useState<'branch' | 'online' | 'home_visit'>('branch');
+  const [newServiceDescription, setNewServiceDescription] = useState('');
 
   // New Staff Form
   const [newStaffName, setNewStaffName] = useState('');
@@ -63,6 +69,17 @@ export default function MerchantDashboard() {
   const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualTime, setManualTime] = useState('16:00');
 
+  // Preset Color Palette Swatches for quick 1-click theme customization
+  const colorSwatches = [
+    { name: 'أسود وذهبي فاخر (Luxe)', primary: '#0f172a', secondary: '#d97706' },
+    { name: 'أزرق طبي هادئ (Care)', primary: '#0284c7', secondary: '#0d9488' },
+    { name: 'زمردي استرخائي (Spa)', primary: '#059669', secondary: '#ec4899' },
+    { name: 'بني وخشب ملكي (Equestrian)', primary: '#78350f', secondary: '#d97706' },
+    { name: 'وردي ونضارة (Beauty)', primary: '#831843', secondary: '#ec4899' },
+    { name: 'بنفسجي وإبداع (Studio)', primary: '#3b0764', secondary: '#a855f7' },
+    { name: 'أزرق رياضي (Auto/Gym)', primary: '#1e3a8a', secondary: '#f59e0b' }
+  ];
+
   // Load Data
   const loadData = async () => {
     if (!slug) return;
@@ -73,22 +90,22 @@ export default function MerchantDashboard() {
       const bizData = await resBiz.json();
       
       if (!bizData || !bizData.id) {
-        // Fallback demo business if not found
         setBusiness({
           id: 'biz_salon_luxe',
           slug: slug,
-          name: 'صالون الفخامة التجريبي',
-          industry: 'barber',
-          template_id: 'luxury-dark',
+          name: 'متجر حجز المواعيد المباشر',
+          industry: 'custom',
+          template_id: 'universal-open',
           phone: '+966500000000',
-          email: 'admin@salon.sa',
-          address: 'الرياض - العليا',
+          email: 'admin@mybusiness.sa',
+          address: 'شارع العليا - الرياض',
           city: 'الرياض',
+          currency: 'SAR',
           logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200&fit=crop',
           cover_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop',
           primary_color: '#0f172a',
           secondary_color: '#d97706',
-          description: 'متجر مواعيد فعال ومجاني.',
+          description: 'منصة مخصصة ومفتوحة لإدارة وتلقي المواعيد بسهولة.',
           trial_start: new Date().toISOString(),
           trial_end: new Date(Date.now() + 6 * 86400000).toISOString(),
           subscription_status: 'trialing',
@@ -99,6 +116,7 @@ export default function MerchantDashboard() {
       }
 
       setBusiness(bizData);
+      if (bizData.currency) setNewServiceCurrency(bizData.currency);
 
       // Fetch Services, Staff, Appointments
       const [resServ, resStaff, resApp, resStats] = await Promise.all([
@@ -155,12 +173,16 @@ export default function MerchantDashboard() {
           business_id: business.id,
           title: newServiceTitle,
           price: Number(newServicePrice),
+          currency: newServiceCurrency || 'SAR',
           duration_min: Number(newServiceDuration),
-          category: newServiceCategory
+          category: newServiceCategory || 'خدمة عامة',
+          location_type: newServiceLocationType,
+          description: newServiceDescription
         })
       });
       setShowAddServiceModal(false);
       setNewServiceTitle('');
+      setNewServiceDescription('');
       loadData();
     } catch (err) {
       console.error('Add service error:', err);
@@ -260,12 +282,12 @@ export default function MerchantDashboard() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-white">{business?.name}</h1>
                 <span className="bg-amber-500/20 text-amber-300 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                  لوحة التاجر
+                  لوحة التحكم
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-                <span>الرابط المباشر:</span>
-                <a href={publicUrl} target="_blank" rel="noreferrer" className="text-amber-400 hover:underline dir-ltr">
+                <span>رابطك المباشر:</span>
+                <a href={publicUrl} target="_blank" rel="noreferrer" className="text-amber-400 hover:underline dir-ltr font-mono font-bold">
                   {publicUrl}
                 </a>
               </p>
@@ -274,30 +296,30 @@ export default function MerchantDashboard() {
 
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
             <button
+              onClick={() => setShowImportExportModal(true)}
+              className="flex-1 sm:flex-none py-2.5 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-slate-700"
+            >
+              <FileJson className="w-4 h-4 text-amber-400" />
+              <span>استيراد/تصدير JSON 📁</span>
+            </button>
+
+            <button
               onClick={() => setShowQRModal(true)}
-              className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-2 border border-slate-700 transition"
+              className="flex-1 sm:flex-none py-2.5 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-700 transition"
             >
               <QrCode className="w-4 h-4 text-amber-400" />
-              <span>رمز QR للطباعة</span>
+              <span>رمز QR</span>
             </button>
 
             <a
               href={publicUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition shadow-md"
+              className="flex-1 sm:flex-none py-2.5 px-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md"
             >
               <ExternalLink className="w-4 h-4" />
               <span>معاينة صفحة العميل</span>
             </a>
-
-            <button
-              onClick={() => setShowNewAppointmentModal(true)}
-              className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>إضافة حجز يدوي</span>
-            </button>
           </div>
         </div>
 
@@ -318,7 +340,7 @@ export default function MerchantDashboard() {
               <span>الإيرادات التقديرية</span>
               <DollarSign className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-black text-amber-400">{stats?.totalRevenue || 0} <span className="text-xs font-normal">ر.س</span></div>
+            <div className="text-2xl font-black text-amber-400">{stats?.totalRevenue || 0} <span className="text-xs font-normal">{business?.currency || 'SAR'}</span></div>
             <div className="text-[11px] text-slate-400 mt-1">من الحجوزات المؤكدة والمكتملة</div>
           </div>
 
@@ -365,7 +387,7 @@ export default function MerchantDashboard() {
             className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'services' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
           >
             <Layers className="w-4 h-4" />
-            <span>الخدمات والأسعار ({services.length})</span>
+            <span>إدارة الخدمات المفتوحة ({services.length})</span>
           </button>
 
           <button
@@ -373,15 +395,15 @@ export default function MerchantDashboard() {
             className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'staff' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
           >
             <Users className="w-4 h-4" />
-            <span>طاقم العمل ({staff.length})</span>
+            <span>فريق العمل والخبراء ({staff.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('branding')}
             className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'branding' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
           >
-            <Settings className="w-4 h-4" />
-            <span>تخصيص الهوية والقالب</span>
+            <Palette className="w-4 h-4" />
+            <span>تخصيص القالب والهوية والتصميم</span>
           </button>
 
           <button
@@ -494,7 +516,7 @@ export default function MerchantDashboard() {
                       <td className="py-3.5 px-2 text-slate-300">{app.service_title}</td>
                       <td className="py-3.5 px-2 text-slate-300">{app.staff_name}</td>
                       <td className="py-3.5 px-2 text-slate-300">{app.appointment_date} • {app.appointment_time}</td>
-                      <td className="py-3.5 px-2 font-bold text-amber-300">{app.price} ر.س</td>
+                      <td className="py-3.5 px-2 font-bold text-amber-300">{app.price} {business?.currency || 'SAR'}</td>
                       <td className="py-3.5 px-2">
                         <select
                           value={app.status}
@@ -526,17 +548,17 @@ export default function MerchantDashboard() {
           </div>
         )}
 
-        {/* TAB 3: SERVICES & PRICING */}
+        {/* TAB 3: FLEXIBLE OPEN SERVICES & PRICING */}
         {activeTab === 'services' && (
           <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h3 className="font-bold text-lg text-white">إدارة الخدمات والأسعار</h3>
-                <p className="text-xs text-slate-400">أضف عدل أو احذف الخدمات المعروضة لعملائك</p>
+                <h3 className="font-bold text-lg text-white">إدارة الخدمات المفتوحة والأسعار</h3>
+                <p className="text-xs text-slate-400">يمكنك إضافة أي نوع من الخدمات بمرونة كاملة دون التقيد بتصنيف محدد</p>
               </div>
               <button
                 onClick={() => setShowAddServiceModal(true)}
-                className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>إضافة خدمة جديدة</span>
@@ -549,16 +571,42 @@ export default function MerchantDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
-                        {serv.category}
+                        {serv.category || 'عامة'}
                       </span>
                       <span className="text-xs text-slate-400">{serv.duration_min} دقيقة</span>
                     </div>
-                    <h4 className="font-bold text-white text-base mb-1">{serv.title}</h4>
+
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-bold text-white text-base">{serv.title}</h4>
+                    </div>
+
+                    {/* Location Badge */}
+                    <div className="mb-3">
+                      {serv.location_type === 'online' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                          <Video className="w-3 h-3" />
+                          <span>أونلاين عبر الزوم/الاتصال</span>
+                        </span>
+                      )}
+                      {serv.location_type === 'home_visit' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          <Home className="w-3 h-3" />
+                          <span>زيارة في موقع العميل/المنزل</span>
+                        </span>
+                      )}
+                      {(!serv.location_type || serv.location_type === 'branch') && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
+                          <MapPin className="w-3 h-3 text-amber-400" />
+                          <span>حضوري بالفرع</span>
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-xs text-slate-400 mb-3 line-clamp-2">{serv.description}</p>
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="font-black text-amber-400 text-base">{serv.price} ر.س</span>
+                    <span className="font-black text-amber-400 text-base">{serv.price} {serv.currency || business?.currency || 'SAR'}</span>
                     <button
                       onClick={async () => {
                         if (confirm('هل أنت تأكد من حذف هذه الخدمة؟')) {
@@ -582,7 +630,7 @@ export default function MerchantDashboard() {
           <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="font-bold text-lg text-white">طاقم العمل والمختصين</h3>
+                <h3 className="font-bold text-lg text-white">طاقم العمل والخبراء</h3>
                 <p className="text-xs text-slate-400">إدارة فريقك ليتمكن العملاء من الاختيار بينهم عند الحجز</p>
               </div>
               <button
@@ -622,58 +670,255 @@ export default function MerchantDashboard() {
           </div>
         )}
 
-        {/* TAB 5: BRANDING & CUSTOMIZATION */}
+        {/* TAB 5: BRANDING & VISUAL CUSTOMIZER */}
         {activeTab === 'branding' && (
-          <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-6">
-            <h3 className="font-bold text-lg text-white">تخصيص هوية ورابط المتجر</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">اسم النشاط التجارى</label>
-                <input
-                  type="text"
-                  value={business?.name || ''}
-                  onChange={(e) => setBusiness(business ? { ...business, name: e.target.value } : null)}
-                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
-                />
+                <h3 className="font-bold text-lg text-white">مُخصّص الهوية والقالب المباشر (Visual Customizer)</h3>
+                <p className="text-xs text-slate-400">تعديل الألوان والخطوط وصورة الهيدر مع معاينة فورية لصفحة الحجز</p>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">معرف الرابط الفريد (Slug)</label>
-                <input
-                  type="text"
-                  value={business?.slug || ''}
-                  onChange={(e) => setBusiness(business ? { ...business, slug: e.target.value } : null)}
-                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs dir-ltr text-right font-mono"
-                />
-              </div>
-
-              <div className="col-span-1 md:col-span-2">
-                <label className="block text-xs font-bold text-slate-300 mb-2">الوصف والنذة</label>
-                <textarea
-                  rows={3}
-                  value={business?.description || ''}
-                  onChange={(e) => setBusiness(business ? { ...business, description: e.target.value } : null)}
-                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportExportModal(true)}
+                className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+              >
+                <FileJson className="w-4 h-4 text-amber-400" />
+                <span>استيراد/تصدير JSON 📁</span>
+              </button>
             </div>
 
-            <button
-              onClick={async () => {
-                if (!business) return;
-                await fetch('/api/businesses', {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ id: business.id, name: business.name, slug: business.slug, description: business.description })
-                });
-                alert('تم حفظ التعديلات بنجاح!');
-                loadData();
-              }}
-              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition"
-            >
-              حفظ التعديلات
-            </button>
+            {/* Split Screen Layout: Customizer Form + Live Booking Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              
+              {/* Form Controls */}
+              <div className="lg:col-span-7 space-y-6">
+                
+                {/* Palette Swatches */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-2">اختر طقم الألوان السريع بنقرة واحدة:</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {colorSwatches.map((swatch, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (business) {
+                            setBusiness({
+                              ...business,
+                              primary_color: swatch.primary,
+                              secondary_color: swatch.secondary
+                            });
+                          }
+                        }}
+                        className="p-2 bg-slate-950 hover:bg-slate-800 rounded-xl border border-slate-800 flex items-center justify-between text-right transition"
+                      >
+                        <span className="text-[11px] font-bold text-slate-300 truncate">{swatch.name}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: swatch.primary }} />
+                          <div className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: swatch.secondary }} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">اسم النشاط التجارى</label>
+                    <input
+                      type="text"
+                      value={business?.name || ''}
+                      onChange={(e) => setBusiness(business ? { ...business, name: e.target.value } : null)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">العملة الافتراضية</label>
+                    <select
+                      value={business?.currency || 'SAR'}
+                      onChange={(e) => setBusiness(business ? { ...business, currency: e.target.value } : null)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
+                    >
+                      <option value="SAR">ريال سعودي (SAR)</option>
+                      <option value="AED">درهم إماراتي (AED)</option>
+                      <option value="KWD">دينار كويتي (KWD)</option>
+                      <option value="QAR">ريال قطري (QAR)</option>
+                      <option value="USD">دولار أمريكي ($ USD)</option>
+                      <option value="EUR">يورو (€ EUR)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">اللون الرئيسي (HEX Color)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={business?.primary_color || '#0f172a'}
+                        onChange={(e) => setBusiness(business ? { ...business, primary_color: e.target.value } : null)}
+                        className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={business?.primary_color || '#0f172a'}
+                        onChange={(e) => setBusiness(business ? { ...business, primary_color: e.target.value } : null)}
+                        className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono text-xs dir-ltr text-right"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">اللون الثانوي / التمييزي</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={business?.secondary_color || '#d97706'}
+                        onChange={(e) => setBusiness(business ? { ...business, secondary_color: e.target.value } : null)}
+                        className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={business?.secondary_color || '#d97706'}
+                        onChange={(e) => setBusiness(business ? { ...business, secondary_color: e.target.value } : null)}
+                        className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono text-xs dir-ltr text-right"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">رابط صورة الهيدر (Cover Banner URL)</label>
+                    <input
+                      type="text"
+                      value={business?.cover_url || ''}
+                      onChange={(e) => setBusiness(business ? { ...business, cover_url: e.target.value } : null)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs dir-ltr text-right font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">معرف الرابط المباشر (Slug)</label>
+                    <input
+                      type="text"
+                      value={business?.slug || ''}
+                      onChange={(e) => setBusiness(business ? { ...business, slug: e.target.value } : null)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs dir-ltr text-right font-mono"
+                    />
+                  </div>
+
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-300 mb-2">الوصف والنذة التعريفية</label>
+                    <textarea
+                      rows={2}
+                      value={business?.description || ''}
+                      onChange={(e) => setBusiness(business ? { ...business, description: e.target.value } : null)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Template Preset Selector */}
+                <div className="pt-4 border-t border-slate-800">
+                  <h4 className="font-bold text-xs text-white mb-2">تطبيق ثيم جاهز من القوالب المتاحة (12+ قالب):</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {TEMPLATES.map((tmpl) => (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => {
+                          if (business) {
+                            setBusiness({
+                              ...business,
+                              template_id: tmpl.id,
+                              primary_color: tmpl.primaryColor,
+                              secondary_color: tmpl.secondaryColor,
+                              cover_url: tmpl.heroImage
+                            });
+                          }
+                        }}
+                        className={`p-2 rounded-xl border text-right transition ${business?.template_id === tmpl.id ? 'bg-amber-500/20 border-amber-500' : 'bg-slate-950 border-slate-800 hover:border-slate-700'}`}
+                      >
+                        <div className="font-bold text-[11px] text-white truncate">{tmpl.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!business) return;
+                    await fetch('/api/businesses', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        id: business.id,
+                        name: business.name,
+                        slug: business.slug,
+                        description: business.description,
+                        currency: business.currency,
+                        template_id: business.template_id,
+                        primary_color: business.primary_color,
+                        secondary_color: business.secondary_color,
+                        cover_url: business.cover_url,
+                        logo_url: business.logo_url
+                      })
+                    });
+                    alert('🎉 تم حفظ جميع التعديلات والألوان وتطبيقها على رابط متجرك المباشر بنجاح!');
+                    loadData();
+                  }}
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition shadow-lg shadow-amber-500/20"
+                >
+                  حفظ وتطبيق الهوية والتعديلات أونلاين
+                </button>
+              </div>
+
+              {/* Live Mini Preview Screen */}
+              <div className="lg:col-span-5 bg-slate-950 p-4 rounded-3xl border border-slate-800 space-y-4 sticky top-20">
+                <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                  <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                    <Eye className="w-4 h-4" />
+                    <span>معاينة حية ومباشرة لصفحة العميل</span>
+                  </span>
+                  <a href={publicUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-white flex items-center gap-1">
+                    <span>فتح بالكامل</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                {/* Simulated Public Booking Card */}
+                <div className="rounded-2xl bg-slate-900 overflow-hidden border border-slate-800 text-xs">
+                  <div className="h-28 relative">
+                    <img src={business?.cover_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop'} alt="Cover" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <img src={business?.logo_url} alt="Logo" className="w-10 h-10 rounded-xl object-cover border border-slate-700 shrink-0" />
+                      <div>
+                        <div className="font-bold text-white text-xs">{business?.name}</div>
+                        <div className="text-[10px] text-slate-400 line-clamp-1">{business?.description}</div>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl border border-slate-800 bg-slate-950 flex justify-between items-center mt-2">
+                      <div>
+                        <div className="font-bold text-white text-xs">{services[0]?.title || 'خدمة حجز أونلاين'}</div>
+                        <div className="text-[10px] text-slate-400">45 دقيقة</div>
+                      </div>
+                      <div className="font-bold text-amber-400">{services[0]?.price || 150} {business?.currency || 'SAR'}</div>
+                    </div>
+
+                    <button className="w-full py-2 bg-amber-500 text-slate-950 font-black rounded-lg text-xs mt-2">
+                      تأكيد الحجز الفوري
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
         )}
 
@@ -734,18 +979,38 @@ export default function MerchantDashboard() {
         onClose={() => setShowQRModal(false)}
       />
 
-      {/* Add Service Modal */}
+      {/* Template Import Export JSON Modal */}
+      <TemplateImportExportModal
+        isOpen={showImportExportModal}
+        onClose={() => setShowImportExportModal(false)}
+        currentBusiness={business}
+        onImportSuccess={(importedData) => {
+          if (business) {
+            setBusiness({
+              ...business,
+              name: importedData.businessName || business.name,
+              primary_color: importedData.primary_color || business.primary_color,
+              secondary_color: importedData.secondary_color || business.secondary_color,
+              currency: importedData.currency || business.currency,
+              template_id: importedData.template_id || business.template_id,
+              cover_url: importedData.cover_url || business.cover_url
+            });
+          }
+        }}
+      />
+
+      {/* Add Flexible Open Service Modal */}
       {showAddServiceModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-md w-full">
-            <h3 className="font-bold text-lg text-white mb-4">إضافة خدمة جديدة</h3>
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-lg w-full">
+            <h3 className="font-bold text-lg text-white mb-4">إضافة خدمة مخصصة (خدمة مفتوحة)</h3>
             <form onSubmit={handleAddService} className="space-y-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">اسم الخدمة *</label>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: قص شعر وتصفيف VIP"
+                  placeholder="مثال: جلسة تدريب خيل، استشارة قانونية، تصوير منتجات..."
                   value={newServiceTitle}
                   onChange={(e) => setNewServiceTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
@@ -754,7 +1019,7 @@ export default function MerchantDashboard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">السعر (ر.س) *</label>
+                  <label className="block text-slate-300 font-bold mb-1">السعر *</label>
                   <input
                     type="number"
                     required
@@ -765,6 +1030,24 @@ export default function MerchantDashboard() {
                 </div>
 
                 <div>
+                  <label className="block text-slate-300 font-bold mb-1">العملة</label>
+                  <select
+                    value={newServiceCurrency}
+                    onChange={(e) => setNewServiceCurrency(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold"
+                  >
+                    <option value="SAR">SAR</option>
+                    <option value="AED">AED</option>
+                    <option value="KWD">KWD</option>
+                    <option value="QAR">QAR</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-slate-300 font-bold mb-1">المدة (بالدقائق)</label>
                   <input
                     type="number"
@@ -773,14 +1056,53 @@ export default function MerchantDashboard() {
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">التصنيف الخاص</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: استشارات، تصوير، دورات..."
+                    value={newServiceCategory}
+                    onChange={(e) => setNewServiceCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">التصنيف</label>
-                <input
-                  type="text"
-                  value={newServiceCategory}
-                  onChange={(e) => setNewServiceCategory(e.target.value)}
+                <label className="block text-slate-300 font-bold mb-1">مكان ونوع تقديم الخدمة</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewServiceLocationType('branch')}
+                    className={`p-2 rounded-xl border text-center text-[11px] font-bold ${newServiceLocationType === 'branch' ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950 text-slate-300 border-slate-800'}`}
+                  >
+                    حضوري بالفرع
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewServiceLocationType('online')}
+                    className={`p-2 rounded-xl border text-center text-[11px] font-bold ${newServiceLocationType === 'online' ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-slate-950 text-slate-300 border-slate-800'}`}
+                  >
+                    أونلاين (زوم)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewServiceLocationType('home_visit')}
+                    className={`p-2 rounded-xl border text-center text-[11px] font-bold ${newServiceLocationType === 'home_visit' ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-950 text-slate-300 border-slate-800'}`}
+                  >
+                    زيارة للعميل
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">تفاصيل ومميزات الخدمة</label>
+                <textarea
+                  rows={2}
+                  placeholder="وصف تفصيلي يشرح للعميل ما الذي تشمله هذه الخدمة..."
+                  value={newServiceDescription}
+                  onChange={(e) => setNewServiceDescription(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
                 />
               </div>
@@ -797,7 +1119,7 @@ export default function MerchantDashboard() {
                   type="submit"
                   className="px-5 py-2 bg-amber-500 text-slate-950 rounded-xl font-bold"
                 >
-                  إضافة
+                  إضافة الخدمة
                 </button>
               </div>
             </form>
@@ -816,7 +1138,7 @@ export default function MerchantDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="مثال: د. محمد أو الأسطورة سامر"
+                  placeholder="مثال: د. محمد، الكابتن هشام..."
                   value={newStaffName}
                   onChange={(e) => setNewStaffName(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
@@ -894,7 +1216,7 @@ export default function MerchantDashboard() {
                 >
                   <option value="">-- حدد الخدمة --</option>
                   {services.map(s => (
-                    <option key={s.id} value={s.id}>{s.title} ({s.price} ر.س)</option>
+                    <option key={s.id} value={s.id}>{s.title} ({s.price} {s.currency || 'SAR'})</option>
                   ))}
                 </select>
               </div>
@@ -924,7 +1246,7 @@ export default function MerchantDashboard() {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowNewAppointmentModal(false)}
+                  onClick={() => setShowAddServiceModal(false)}
                   className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold"
                 >
                   إلغاء

@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TEMPLATES } from '../data/initialData';
-import { Sparkles, ArrowRight, Check, Store, Scissors, Stethoscope, Smile, Briefcase, Palette, Globe, CheckCircle2 } from 'lucide-react';
+import { 
+  Sparkles, 
+  ArrowRight, 
+  Scissors, 
+  Stethoscope, 
+  Smile, 
+  Briefcase, 
+  Dumbbell, 
+  Camera, 
+  Car, 
+  FileJson,
+  CheckCircle2, 
+  Layers
+} from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import TemplateImportExportModal from '../components/TemplateImportExportModal';
 
 export default function WizardPage() {
   const navigate = useNavigate();
@@ -13,15 +27,20 @@ export default function WizardPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Import Modal
+  const [showImportModal, setShowImportModal] = useState(false);
+
   // Form states
   const [businessName, setBusinessName] = useState('');
   const [industry, setIndustry] = useState('barber');
+  const [customIndustryName, setCustomIndustryName] = useState('');
   const [slug, setSlug] = useState('');
-  const [templateId, setTemplateId] = useState(preSelectedTemplate || 'luxury-dark');
+  const [templateId, setTemplateId] = useState(preSelectedTemplate || 'universal-open');
   const [phone, setPhone] = useState('+966550001122');
   const [city, setCity] = useState('الرياض');
   const [address, setAddress] = useState('طريق الملك فهد');
   const [primaryColor, setPrimaryColor] = useState('#0f172a');
+  const [currency, setCurrency] = useState('SAR');
 
   useEffect(() => {
     if (preSelectedTemplate) {
@@ -50,20 +69,23 @@ export default function WizardPage() {
     setLoading(true);
 
     try {
-      // 1. Create Business
+      const finalIndustryName = industry === 'custom' && customIndustryName ? customIndustryName : industry;
+
       const resBiz = await fetch('/api/businesses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: businessName || 'منصة المواعيد الاحترافية',
           slug: slug || 'store-' + Date.now().toString(36),
-          industry: industry,
+          industry: finalIndustryName,
+          industry_custom_name: customIndustryName,
           template_id: templateId,
           phone: phone,
           email: 'owner@' + (slug || 'mybusiness') + '.sa',
           city: city,
           address: address,
           primary_color: primaryColor,
+          currency: currency,
           logo_url: selectedTemplateObj.logoDefault,
           cover_url: selectedTemplateObj.heroImage,
           description: selectedTemplateObj.description
@@ -73,7 +95,7 @@ export default function WizardPage() {
       const bizData = await resBiz.json();
       const finalSlug = bizData.slug || slug;
 
-      // 2. Add sample services
+      // Add sample services
       for (const service of selectedTemplateObj.sampleServices) {
         await fetch('/api/services', {
           method: 'POST',
@@ -82,14 +104,16 @@ export default function WizardPage() {
             business_id: bizData.id,
             title: service.title,
             price: service.price,
+            currency: currency,
             duration_min: service.duration,
             category: service.category,
-            description: 'خدمة احترافية مقدمة من فريق العمل.'
+            location_type: service.location_type || 'branch',
+            description: 'خدمة احترافية مخصصة ومفتوحة التحديد.'
           })
         });
       }
 
-      // 3. Add sample staff
+      // Add sample staff
       for (const staff of selectedTemplateObj.sampleStaff) {
         await fetch('/api/staff', {
           method: 'POST',
@@ -104,7 +128,6 @@ export default function WizardPage() {
         });
       }
 
-      // Redirect to merchant dashboard
       navigate(`/merchant/${finalSlug}`);
     } catch (err) {
       console.error('Wizard error:', err);
@@ -124,14 +147,27 @@ export default function WizardPage() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold rounded-full mb-3">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>خطوة واحدة لتكون أونلاين</span>
+            <span>اختر قالبك أو استورد ملف JSON مباشرة</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-white">
-            مُنشئ مواقع الحجز السريع (Mawa'eed Builder)
+            مُنشئ مواقع الحجز الذكي الشامل (Mawa'eed Builder)
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-2">
-            أدخل بيانات نشاطك التجاري واختر القالب المناسب لتنشيط تجربتك المجانية لمدة 7 أيام
+            حدد نشاطك أو استورد ملف قالبك للبدء في تجربتك المجانية لمدة أسبوع
           </p>
+        </div>
+
+        {/* Quick Action Bar for Import */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+          <div className="text-xs font-bold text-slate-300">هل لديك ملف قالب جاهز على كمبيوترك؟</div>
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="w-full sm:w-auto py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-md"
+          >
+            <FileJson className="w-4 h-4" />
+            <span>استيراد قالب من كمبيوترك (Upload JSON)</span>
+          </button>
         </div>
 
         {/* Form Container */}
@@ -141,12 +177,12 @@ export default function WizardPage() {
           <div className="flex items-center justify-between mb-8 border-b border-slate-800 pb-6 text-xs font-bold">
             <div className={`flex items-center gap-2 ${step >= 1 ? 'text-amber-400' : 'text-slate-500'}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-slate-950 text-xs ${step >= 1 ? 'bg-amber-500' : 'bg-slate-800 text-slate-400'}`}>1</span>
-              <span>بيانات النشاط</span>
+              <span>بيانات النشاط ونوعه</span>
             </div>
             <div className="w-12 h-0.5 bg-slate-800" />
             <div className={`flex items-center gap-2 ${step >= 2 ? 'text-amber-400' : 'text-slate-500'}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-slate-950 text-xs ${step >= 2 ? 'bg-amber-500' : 'bg-slate-800 text-slate-400'}`}>2</span>
-              <span>اختيار القالب</span>
+              <span>اختيار القالب والعملة</span>
             </div>
             <div className="w-12 h-0.5 bg-slate-800" />
             <div className={`flex items-center gap-2 ${step >= 3 ? 'text-amber-400' : 'text-slate-500'}`}>
@@ -157,15 +193,15 @@ export default function WizardPage() {
 
           <form onSubmit={handleSubmit}>
             
-            {/* STEP 1: Business Details */}
+            {/* STEP 1: Business Details & Industry */}
             {step === 1 && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-2">اسم النشاط / المتجر *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-2">اسم النشاط / المتجر الخاص بك *</label>
                   <input
                     type="text"
                     required
-                    placeholder="مثال: صالون التميز للرجال، عيادة الدكتورة سارة..."
+                    placeholder="مثال: استوديو اللقطة الذكية، مربط الخيل، عيادة د. سارة، مركز الصيانة..."
                     value={businessName}
                     onChange={handleNameChange}
                     className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
@@ -173,8 +209,17 @@ export default function WizardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-2">طبيعة ونوع العمل *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-2">طبيعة ومجال العمل (اختر أو أضف نشاطك الخاص) *</label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setIndustry('custom'); setTemplateId('universal-open'); }}
+                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-2 transition ${industry === 'custom' ? 'bg-amber-500 border-amber-400 text-slate-950 font-black' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      <Layers className="w-5 h-5 text-amber-300 fill-amber-300" />
+                      <span>نشاط مخصص / آخر ⚡</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => { setIndustry('barber'); setTemplateId('luxury-dark'); }}
@@ -210,12 +255,54 @@ export default function WizardPage() {
                       <Briefcase className="w-5 h-5 text-indigo-400" />
                       <span>استشارات وتدريب</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIndustry('fitness'); setTemplateId('fitness-pulse'); }}
+                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-2 transition ${industry === 'fitness' ? 'bg-rose-500/20 border-rose-500 text-rose-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      <Dumbbell className="w-5 h-5 text-rose-400" />
+                      <span>لياقة وبناء أجسام</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIndustry('photography'); setTemplateId('studio-craft'); }}
+                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-2 transition ${industry === 'photography' ? 'bg-purple-500/20 border-purple-500 text-purple-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      <Camera className="w-5 h-5 text-purple-400" />
+                      <span>تصوير وفنون</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIndustry('auto'); setTemplateId('auto-detail'); }}
+                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-2 transition ${industry === 'auto' ? 'bg-blue-500/20 border-blue-500 text-blue-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      <Car className="w-5 h-5 text-blue-400" />
+                      <span>خدمة وتلميع سيارات</span>
+                    </button>
                   </div>
                 </div>
 
+                {/* Custom Industry Input */}
+                {industry === 'custom' && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl animate-in zoom-in duration-200 space-y-2">
+                    <label className="block text-xs font-bold text-amber-300">اكتب اسم نشاطك الخيار المخصص:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: مربط فروسية، مركز تعليم لغات، مستشار عقاري، صيانة منازل..."
+                      value={customIndustryName}
+                      onChange={(e) => setCustomIndustryName(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                    />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-2">رقم التواصل / الجوال</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">رقم الجوال للتواصل والواتساب</label>
                     <input
                       type="text"
                       value={phone}
@@ -225,7 +312,7 @@ export default function WizardPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-2">المدينة والعنوان</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-2">المدينة والمنطقة</label>
                     <input
                       type="text"
                       value={city}
@@ -254,11 +341,31 @@ export default function WizardPage() {
               </div>
             )}
 
-            {/* STEP 2: Choose Template */}
+            {/* STEP 2: Choose Template & Currency */}
             {step === 2 && (
               <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="text-xs text-slate-400 mb-2">
-                  اختر الهوية البصرية والقالب الأنسب لنشاطك:
+                
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                  <div>
+                    <span className="text-xs font-bold text-white block">اختر عملة التسعير لعرض خدماتك:</span>
+                    <span className="text-[11px] text-slate-400">ستعرض جميع أسعار الخدمات بهذه العملة للعميل</span>
+                  </div>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 text-amber-400 font-bold px-4 py-2 rounded-xl text-xs"
+                  >
+                    <option value="SAR">ريال سعودي (SAR)</option>
+                    <option value="AED">درهم إماراتي (AED)</option>
+                    <option value="KWD">دينار كويتي (KWD)</option>
+                    <option value="QAR">ريال قطري (QAR)</option>
+                    <option value="USD">دولار أمريكي ($ USD)</option>
+                    <option value="EUR">يورو (€ EUR)</option>
+                  </select>
+                </div>
+
+                <div className="text-xs text-slate-400">
+                  اختر من بين 12+ قالب مسبق أو استورد قالب من جهازك:
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -329,7 +436,7 @@ export default function WizardPage() {
 
                     <div>
                       <span className="text-slate-500 block">نوع النشاط والقالب:</span>
-                      <strong className="text-white text-sm">{selectedTemplateObj.name}</strong>
+                      <strong className="text-white text-sm">{industry === 'custom' && customIndustryName ? customIndustryName : selectedTemplateObj.name}</strong>
                     </div>
 
                     <div className="col-span-2">
@@ -378,6 +485,18 @@ export default function WizardPage() {
         </div>
 
       </main>
+
+      {/* Template Import Modal */}
+      <TemplateImportExportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportSuccess={(importedData) => {
+          if (importedData.businessName) setBusinessName(importedData.businessName);
+          if (importedData.primary_color) setPrimaryColor(importedData.primary_color);
+          if (importedData.currency) setCurrency(importedData.currency);
+          if (importedData.industry) setIndustry(importedData.industry);
+        }}
+      />
 
       <Footer />
     </div>
