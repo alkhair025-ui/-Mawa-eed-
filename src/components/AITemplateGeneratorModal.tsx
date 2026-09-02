@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl } from '../lib/api';
 import { Sparkles, Wand2, RefreshCw, Check, Palette, Layers, CheckCircle2 } from 'lucide-react';
 import { TemplateConfig } from '../types';
 
@@ -170,7 +171,7 @@ export default function AITemplateGeneratorModal({
     try {
       if (businessId) {
         // 1. Update business in database directly
-        await fetch('/api/businesses', {
+        await fetch(apiUrl('/api/businesses'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -186,7 +187,7 @@ export default function AITemplateGeneratorModal({
 
         // 2. Insert generated services if available
         for (const s of generatedServices) {
-          await fetch('/api/services', {
+          await fetch(apiUrl('/api/services'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
