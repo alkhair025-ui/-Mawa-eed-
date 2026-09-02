@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../lib/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TEMPLATES } from '../data/initialData';
 import { 
@@ -71,7 +72,7 @@ export default function WizardPage() {
     try {
       const finalIndustryName = industry === 'custom' && customIndustryName ? customIndustryName : industry;
 
-      const resBiz = await fetch('/api/businesses', {
+      const resBiz = await fetch(apiUrl('/api/businesses'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,7 +98,7 @@ export default function WizardPage() {
 
       // Add sample services
       for (const service of selectedTemplateObj.sampleServices) {
-        await fetch('/api/services', {
+        await fetch(apiUrl('/api/services'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -115,7 +116,7 @@ export default function WizardPage() {
 
       // Add sample staff
       for (const staff of selectedTemplateObj.sampleStaff) {
-        await fetch('/api/staff', {
+        await fetch(apiUrl('/api/staff'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

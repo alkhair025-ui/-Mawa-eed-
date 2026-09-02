@@ -124,7 +124,7 @@ export default function LandingPage() {
                     احجز موعدك أو استشارتك أو خدمتك بضغطة زر واحدة
                   </h3>
                   <p className="text-xs text-slate-400">
-                    حدد الخدمة، اختر المختص أو الوقت المناسب، واستلم تأكيد الحجز فوراً عبر الواتساب والتقويم.
+                    حدد الخدمة، اختر المختص أو الوقت المناسب، وأرسل تأكيد الحجز للعميل عبر واتساب بضغطة زر.
                   </p>
                   
                   <div className="grid grid-cols-2 gap-3 pt-2">
@@ -273,6 +273,114 @@ export default function LandingPage() {
           ))}
         </div>
 
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/80">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h2 className="text-2xl sm:text-4xl font-black text-white">كل ما تحتاجه لإدارة مواعيد عملك</h2>
+          <p className="text-slate-400 text-sm mt-3">منصة عربية بالكامل تتيح لك إنشاء موقع حجز احترافي خلال دقائق</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[
+            { icon: FileJson, title: 'استيراد وتصدير JSON', desc: 'احفظ قالب متجرك كملف وأعد استخدامه أو شاركه مع فرع آخر بضغطة زر.' },
+            { icon: Layers, title: 'خدمات مفتوحة بلا حدود', desc: 'أضف أي نوع خدمات بأسعار ومدد وتصنيفات مخصصة لحضريك.' },
+            { icon: Calendar, title: 'تقويم وأجندة مواعيد', desc: 'تابع كل الحجوزات القادمة وحالاتها (مؤكد، قيد الانتظار، مكتمل) من لوحة واحدة.' },
+            { icon: Sparkles, title: 'مخصّص هوية بصري', desc: 'غيّر الألوان والثيم وصورة الهيدر مع معاينة حية فورية قبل النشر.' },
+            { icon: QrCode, title: 'رمز QR للمشاركة', desc: 'شارك رابط حجزك مع العملاء عبر رمز QR جاهز للطباعة.' },
+            { icon: Globe, title: 'دعم العملات العربية والعالمية', desc: 'ريال سعودي، درهم، دينار كويتي، جنيه مصري، ليرة سورية، وأكثر من 20 عملة.' },
+          ].map((f, idx) => (
+            <div key={idx} className="bg-slate-900 rounded-2xl p-6 border border-slate-800 hover:border-slate-700 transition">
+              <div className="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mb-4">
+                <f.icon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-white text-sm mb-1">{f.title}</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/80">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h2 className="text-2xl sm:text-4xl font-black text-white">أسعار واضحة، ابدأ مجاناً 7 أيام</h2>
+          <p className="text-slate-400 text-sm mt-3">جرّب كل المزايا كاملة دون قيود، ثم اختر الباقة المناسبة لحجم عملك.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {[
+            { name: 'الأساسية', price: '99', popular: false, features: ['موقع حجز واحد', 'خدمات وموظفون بلا حدود', 'تأكيد حجز عبر واتساب', 'تخصيص الألوان والثيم', 'رمز QR للمشاركة'] },
+            { name: 'الاحترافية', price: '199', popular: true, features: ['كل مزايا الأساسية', 'استيراد/تصدير قوالب JSON', 'إحصائيات وإيرادات', 'أكثر من قالب جاهز', 'دعم أولوية عبر واتساب'] },
+            { name: 'الأعمال', price: '399', popular: false, features: ['كل مزايا الاحترافية', 'مواقع متعددة للفروع', 'مدير حساب مخصص', 'تكاملات مخصصة', 'تقارير متقدمة'] },
+          ].map((plan) => (
+            <div key={plan.name} className={`p-6 rounded-3xl border bg-slate-900 relative ${plan.popular ? 'border-amber-500 shadow-lg shadow-amber-500/10' : 'border-slate-800'}`}>
+              {plan.popular && (
+                <span className="absolute -top-3 right-1/2 translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-bold px-3 py-0.5 rounded-full">الأكثر طلباً</span>
+              )}
+              <h3 className="font-bold text-white text-base mb-2">باقة {plan.name}</h3>
+              <div className="flex items-end gap-1 mb-5">
+                <span className="text-3xl font-black text-amber-400">{plan.price}</span>
+                <span className="text-xs text-slate-400 mb-1">ر.س / شهر</span>
+              </div>
+              <ul className="space-y-2.5 mb-6">
+                {plan.features.map((feat, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/build"
+                className={`block w-full py-3 rounded-xl font-bold text-xs text-center transition ${plan.popular ? 'bg-amber-500 hover:bg-amber-400 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+              >
+                ابدأ التجربة المجانية
+              </Link>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-center text-xs text-slate-500 mt-8">الأسعار بالريال السعودي. تدعم المنصة كل العملات العربية لعرض الأسعار لعملائك.</p>
+      </section>
+
+      {/* Live Demo Links Section */}
+      <section id="demo-links" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/80">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h2 className="text-2xl sm:text-4xl font-black text-white">جرّب مواقع حقيقية قبل أن تبدأ</h2>
+          <p className="text-slate-400 text-sm mt-3">معاينة حية لصفحة حجز العميل ولوحة تحكم التاجر</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <Link
+            to="/b/salon-luxe"
+            className="group bg-slate-900 rounded-2xl p-6 border border-slate-800 hover:border-amber-500/50 transition flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-sm">صفحة حجز العميل</h3>
+              <p className="text-xs text-slate-400 mt-0.5">صالون فاخر — اختر الخدمة والمختص والوقت</p>
+            </div>
+            <ArrowLeft className="w-4 h-4 text-slate-600 group-hover:text-amber-400 mr-auto transition" />
+          </Link>
+
+          <Link
+            to="/merchant/salon-luxe"
+            className="group bg-slate-900 rounded-2xl p-6 border border-slate-800 hover:border-amber-500/50 transition flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+              <BarChart3 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-sm">لوحة تحكم التاجر</h3>
+              <p className="text-xs text-slate-400 mt-0.5">إدارة الخدمات والمواعيد والإحصائيات</p>
+            </div>
+            <ArrowLeft className="w-4 h-4 text-slate-600 group-hover:text-amber-400 mr-auto transition" />
+          </Link>
+        </div>
       </section>
 
       <Footer />

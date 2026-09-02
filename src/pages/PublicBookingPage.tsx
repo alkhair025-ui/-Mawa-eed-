@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../lib/api';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Calendar, 
@@ -52,15 +53,15 @@ export default function PublicBookingPage() {
       if (!slug) return;
       setLoading(true);
       try {
-        const resBiz = await fetch(`/api/businesses?slug=${slug}`);
+        const resBiz = await fetch(apiUrl(`/api/businesses?slug=${slug}`));
         const bizData = await resBiz.json();
 
         if (bizData && bizData.id) {
           setBusiness(bizData);
 
           const [resServ, resStaff] = await Promise.all([
-            fetch(`/api/services?business_id=${bizData.id}`),
-            fetch(`/api/staff?business_id=${bizData.id}`)
+            fetch(apiUrl(`/api/services?business_id=${bizData.id}`)),
+            fetch(apiUrl(`/api/staff?business_id=${bizData.id}`))
           ]);
 
           const dataServ = await resServ.json();
@@ -116,7 +117,7 @@ export default function PublicBookingPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/appointments', {
+      const res = await fetch(apiUrl('/api/appointments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl } from '../lib/api';
 import { Search, Calendar, Phone, CheckCircle2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -17,7 +18,7 @@ export default function BookingTrackerPage() {
       const isCode = query.startsWith('BK-');
       const param = isCode ? `booking_code=${encodeURIComponent(query)}` : `phone=${encodeURIComponent(query)}`;
       
-      const res = await fetch(`/api/appointments?${param}`);
+      const res = await fetch(apiUrl(`/api/appointments?${param}`));
       const data = await res.json();
       setResults(Array.isArray(data) ? data : []);
     } catch (err) {

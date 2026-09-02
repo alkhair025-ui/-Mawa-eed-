@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../lib/api';
 import { useParams } from 'react-router-dom';
 import { 
   Calendar, 
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Business, Service, Staff, Appointment, TemplateConfig } from '../types';
 import { TEMPLATES } from '../data/initialData';
+import { CURRENCIES } from '../data/currencies';
 import TrialBanner from '../components/TrialBanner';
 import QRCodeModal from '../components/QRCodeModal';
 import WhatsAppHelper from '../components/WhatsAppHelper';
@@ -86,7 +88,7 @@ export default function MerchantDashboard() {
     setLoading(true);
     try {
       // Fetch Business
-      const resBiz = await fetch(`/api/businesses?slug=${slug}`);
+      const resBiz = await fetch(apiUrl(`/api/businesses?slug=${slug}`));
       const bizData = await resBiz.json();
       
       if (!bizData || !bizData.id) {
@@ -120,10 +122,10 @@ export default function MerchantDashboard() {
 
       // Fetch Services, Staff, Appointments
       const [resServ, resStaff, resApp, resStats] = await Promise.all([
-        fetch(`/api/services?business_id=${bizData.id}`),
-        fetch(`/api/staff?business_id=${bizData.id}`),
-        fetch(`/api/appointments?business_id=${bizData.id}`),
-        fetch(`/api/stats?business_id=${bizData.id}`)
+        fetch(apiUrl(`/api/services?business_id=${bizData.id}`)),
+        fetch(apiUrl(`/api/staff?business_id=${bizData.id}`)),
+        fetch(apiUrl(`/api/appointments?business_id=${bizData.id}`)),
+        fetch(apiUrl(`/api/stats?business_id=${bizData.id}`))
       ]);
 
       const dataServ = await resServ.json();
@@ -150,7 +152,7 @@ export default function MerchantDashboard() {
   // Status Change Handler
   const handleUpdateStatus = async (appointmentId: number, newStatus: string) => {
     try {
-      await fetch('/api/appointments', {
+      await fetch(apiUrl('/api/appointments'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: appointmentId, status: newStatus })
@@ -166,7 +168,7 @@ export default function MerchantDashboard() {
     e.preventDefault();
     if (!business) return;
     try {
-      await fetch('/api/services', {
+      await fetch(apiUrl('/api/services'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +196,7 @@ export default function MerchantDashboard() {
     e.preventDefault();
     if (!business) return;
     try {
-      await fetch('/api/staff', {
+      await fetch(apiUrl('/api/staff'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,7 +223,7 @@ export default function MerchantDashboard() {
     const serv = services.find(s => s.id === manualServiceId);
 
     try {
-      await fetch('/api/appointments', {
+      await fetch(apiUrl('/api/appointments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -610,7 +612,7 @@ export default function MerchantDashboard() {
                     <button
                       onClick={async () => {
                         if (confirm('هل أنت تأكد من حذف هذه الخدمة؟')) {
-                          await fetch('/api/services', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: serv.id }) });
+                          await fetch(apiUrl('/api/services'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: serv.id }) });
                           loadData();
                         }
                       }}
@@ -656,7 +658,7 @@ export default function MerchantDashboard() {
                   <button
                     onClick={async () => {
                       if (confirm('حذف هذا الموظف؟')) {
-                        await fetch('/api/staff', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: st.id }) });
+                        await fetch(apiUrl('/api/staff'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: st.id }) });
                         loadData();
                       }
                     }}
@@ -742,12 +744,9 @@ export default function MerchantDashboard() {
                       onChange={(e) => setBusiness(business ? { ...business, currency: e.target.value } : null)}
                       className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                     >
-                      <option value="SAR">ريال سعودي (SAR)</option>
-                      <option value="AED">درهم إماراتي (AED)</option>
-                      <option value="KWD">دينار كويتي (KWD)</option>
-                      <option value="QAR">ريال قطري (QAR)</option>
-                      <option value="USD">دولار أمريكي ($ USD)</option>
-                      <option value="EUR">يورو (€ EUR)</option>
+                      {CURRENCIES.map((c) => (
+                        <option key={c.code} value={c.code}>{c.name} ({c.symbol} {c.code})</option>
+                      ))}
                     </select>
                   </div>
 
@@ -848,7 +847,7 @@ export default function MerchantDashboard() {
                 <button
                   onClick={async () => {
                     if (!business) return;
-                    await fetch('/api/businesses', {
+                    await fetch(apiUrl('/api/businesses'), {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1036,12 +1035,9 @@ export default function MerchantDashboard() {
                     onChange={(e) => setNewServiceCurrency(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold"
                   >
-                    <option value="SAR">SAR</option>
-                    <option value="AED">AED</option>
-                    <option value="KWD">KWD</option>
-                    <option value="QAR">QAR</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
