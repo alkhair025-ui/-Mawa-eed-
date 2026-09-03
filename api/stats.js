@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { filter } from './store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7,42 +7,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
     const { business_id } = req.query;
-    if (!business_id) return res.status(400).json({ error: 'Missing business_id' });
-
-    // Fetch appointments for metrics calculation
-    const { data: appointments, error: appError } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('business_id', business_id);
-
-    if (appError) throw appError;
-
-    const totalBookings = appointments?.length || 0;
-    const totalRevenue = appointments
-      ?.filter(a => a.status === 'confirmed' || a.status === 'completed')
-      .reduce((sum, a) => sum + Number(a.price || 0), 0) || 0;
-    
-    const pendingCount = appointments?.filter(a => a.status === 'pending').length || 0;
-    const confirmedCount = appointments?.filter(a => a.status === 'confirmed').length || 0;
-    const completedCount = appointments?.filter(a => a.status === 'completed').length || 0;
-    const cancelledCount = appointments?.filter(a => a.status === 'cancelled').length || 0;
-
-    // Service breakdown
-    const serviceCounts = {};
-    appointments?.forEach(a => {
-      const title = a.service_title || 'غير محدد';
-      serviceCounts[title] = (serviceCounts[title] || 0) + 1;
-    });
-
+    let appointments = filter('appointments', () => true);
+    if (business_id) appointments = appointments.filter((a) => String(a.business_id) === String(business_id));
+    const confirmed = appointments.filter((a) => a.status === 'confirmed' || a.status === 'completed');
+    const totalRevenue = confirmed.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
     return res.status(200).json({
-      totalBookings,
+      totalBookings: appointments.length,
+      confirmedCount: appointments.filter((a) => a.status === 'confirmed').length,
+      pendingCount: appointments.filter((a) => a.status === 'pending').length,
+      waitlistCount: appointments.filter((a) => a.status === 'waitlist').length,
       totalRevenue,
-      pendingCount,
-      confirmedCount,
-      completedCount,
-      cancelledCount,
-      serviceCounts
     });
   } catch (err) {
     console.error('API Stats error:', err);
