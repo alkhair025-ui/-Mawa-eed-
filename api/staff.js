@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getAll, filter, insert, update, remove } from './store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,62 +9,35 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const { business_id } = req.query;
-      let query = supabase.from('staff').select('*');
-      if (business_id) {
-        query = query.eq('business_id', business_id);
-      }
-      const { data, error } = await query.order('id', { ascending: true });
-      if (error) throw error;
+      let data = getAll('staff');
+      if (business_id) data = filter('staff', (s) => String(s.business_id) === String(business_id));
       return res.status(200).json(data);
     }
-
     if (req.method === 'POST') {
-      const payload = req.body;
-      const { data, error } = await supabase
-        .from('staff')
-        .insert({
-          business_id: payload.business_id,
-          name: payload.name,
-          role: payload.role || 'مختص',
-          avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&fit=crop',
-          phone: payload.phone || '',
-          is_active: payload.is_active !== undefined ? payload.is_active : true
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(201).json(data);
+      const payload = req.body || {};
+      const row = {
+        business_id: payload.business_id,
+        name: payload.name || 'موظف',
+        role: payload.role || 'مختص',
+        avatar: payload.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop',
+        phone: payload.phone || '',
+        is_active: payload.is_active !== false,
+      };
+      return res.status(201).json(insert('staff', row));
     }
-
     if (req.method === 'PUT') {
-      const { id, ...updates } = req.body;
+      const { id, ...updates } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing staff id' });
-
-      const { data, error } = await supabase
-        .from('staff')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = update('staff', id, updates);
+      if (!data) return res.status(404).json({ error: 'Not found' });
       return res.status(200).json(data);
     }
-
     if (req.method === 'DELETE') {
-      const { id } = req.body;
+      const { id } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing staff id' });
-
-      const { error } = await supabase
-        .from('staff')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      remove('staff', id);
       return res.status(200).json({ ok: true });
     }
-
     res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('API Staff error:', err);
