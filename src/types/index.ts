@@ -1,10 +1,7 @@
-index.ts‎
-+28
-Lines changed: 28 additions & 0 deletions
-Original file line number	Diff line number	Diff line change
-@@ -21,6 +21,15 @@ export interface Business {
-  subscription_status: string;
-  plan_name: string;
+export interface Business {
+  id?: string;
+  subscription_status?: string;
+  plan_name?: string;
   created_at?: string;
   /** JSON string or object of weekly hours */
   working_hours?: string | Record<string, unknown>;
@@ -18,7 +15,18 @@ Original file line number	Diff line number	Diff line change
 }
 
 export interface Service {
-@@ -64,6 +73,11 @@ export interface Appointment {
+  id?: string;
+  business_id?: string;
+  name: string;
+  price: number;
+  duration: number;
+  category?: string;
+  location_type?: string;
+}
+
+export interface Appointment {
+  id?: string;
+  business_id?: string;
   status: 'confirmed' | 'pending' | 'completed' | 'cancelled' | 'waitlist';
   notes?: string;
   created_at?: string;
@@ -30,10 +38,10 @@ export interface Service {
 }
 
 export interface TemplateConfig {
-@@ -81,3 +95,17 @@ export interface TemplateConfig {
   sampleServices: { title: string; price: number; duration: number; category: string; location_type?: string }[];
   sampleStaff: { name: string; role: string; avatar: string }[];
 }
+
 export interface LedgerEntry {
   id: number;
   business_id: string;
