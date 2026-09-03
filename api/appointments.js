@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getAll, filter, findOne, insert, update, remove } from './store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,43 +9,30 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const { business_id, date, status, phone, booking_code } = req.query;
-      let query = supabase.from('appointments').select('*');
-
-      if (business_id) query = query.eq('business_id', business_id);
-      if (date) query = query.eq('appointment_date', date);
-      if (status) query = query.eq('status', status);
-      if (phone) query = query.eq('customer_phone', phone);
-      if (booking_code) query = query.eq('booking_code', booking_code);
-
-      const { data, error } = await query.order('id', { ascending: false });
-      if (error) throw error;
+      let data = getAll('appointments');
+      if (business_id) data = data.filter((a) => String(a.business_id) === String(business_id));
+      if (date) data = data.filter((a) => a.appointment_date === date);
+      if (status) data = data.filter((a) => a.status === status);
+      if (phone) data = data.filter((a) => a.customer_phone === phone);
+      if (booking_code) data = data.filter((a) => a.booking_code === booking_code);
       return res.status(200).json(data);
     }
 
     if (req.method === 'POST') {
-      const payload = req.body;
+      const payload = req.body || {};
       const code = 'BK-' + Math.floor(10000 + Math.random() * 90000);
       const requestedStatus = payload.status || 'confirmed';
 
-      // --- Conflict check (only for confirmed / pending, not waitlist) ---
       if (requestedStatus !== 'waitlist') {
-        let conflictQuery = supabase
-          .from('appointments')
-          .select('id, customer_name, staff_id, staff_name, status')
-          .eq('business_id', payload.business_id)
-          .eq('appointment_date', payload.appointment_date)
-          .eq('appointment_time', payload.appointment_time)
-          .in('status', ['confirmed', 'pending']);
-
-        // If a specific staff is chosen, conflict only on that staff
-        if (payload.staff_id) {
-          conflictQuery = conflictQuery.eq('staff_id', payload.staff_id);
-        }
-
-        const { data: conflicts, error: conflictError } = await conflictQuery;
-        if (conflictError) throw conflictError;
-
-        if (conflicts && conflicts.length > 0) {
+        const conflicts = filter('appointments', (a) => {
+          if (String(a.business_id) !== String(payload.business_id)) return false;
+          if (a.appointment_date !== payload.appointment_date) return false;
+          if (a.appointment_time !== payload.appointment_time) return false;
+          if (a.status !== 'confirmed' && a.status !== 'pending') return false;
+          if (payload.staff_id && a.staff_id && String(a.staff_id) !== String(payload.staff_id)) return false;
+          return true;
+        });
+        if (conflicts.length > 0) {
           return res.status(409).json({
             error: 'slot_taken',
             message: 'هذا الوقت محجوز مسبقاً',
@@ -70,75 +57,44 @@ export default async function handler(req, res) {
         price: payload.price || 0,
         status: requestedStatus,
         notes: payload.notes || '',
+        created_at: new Date().toISOString(),
+        deposit_amount: Number(payload.deposit_amount) || 0,
+        payment_method: payload.payment_method || '',
+        payment_status: payload.payment_status || 'not_required',
+        payment_ref: payload.payment_ref || '',
       };
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert(newAppointment)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(201).json(data);
+      return res.status(201).json(insert('appointments', newAppointment));
     }
 
     if (req.method === 'PUT') {
-      const { id, ...updates } = req.body;
+      const { id, ...updates } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing appointment id' });
-
-      // If promoting waitlist → confirmed, check conflict again
       if (updates.status === 'confirmed') {
-        const { data: current } = await supabase
-          .from('appointments')
-          .select('*')
-          .eq('id', id)
-          .single();
-
+        const current = findOne('appointments', (a) => String(a.id) === String(id));
         if (current) {
-          let conflictQuery = supabase
-            .from('appointments')
-            .select('id')
-            .eq('business_id', current.business_id)
-            .eq('appointment_date', current.appointment_date)
-            .eq('appointment_time', current.appointment_time)
-            .in('status', ['confirmed', 'pending'])
-            .neq('id', id);
-
-          if (current.staff_id) {
-            conflictQuery = conflictQuery.eq('staff_id', current.staff_id);
-          }
-
-          const { data: conflicts } = await conflictQuery;
-          if (conflicts && conflicts.length > 0) {
-            return res.status(409).json({
-              error: 'slot_taken',
-              message: 'لا يمكن التأكيد — الوقت ما زال محجوزاً',
-            });
+          const conflicts = filter('appointments', (a) => {
+            if (String(a.id) === String(id)) return false;
+            if (String(a.business_id) !== String(current.business_id)) return false;
+            if (a.appointment_date !== current.appointment_date) return false;
+            if (a.appointment_time !== current.appointment_time) return false;
+            if (a.status !== 'confirmed' && a.status !== 'pending') return false;
+            if (current.staff_id && a.staff_id && String(a.staff_id) !== String(current.staff_id)) return false;
+            return true;
+          });
+          if (conflicts.length > 0) {
+            return res.status(409).json({ error: 'slot_taken', message: 'لا يمكن التأكيد — الوقت ما زال محجوزاً' });
           }
         }
       }
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = update('appointments', id, updates);
+      if (!data) return res.status(404).json({ error: 'Not found' });
       return res.status(200).json(data);
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.body;
+      const { id } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing appointment id' });
-
-      const { error } = await supabase
-        .from('appointments')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      remove('appointments', id);
       return res.status(200).json({ ok: true });
     }
 
