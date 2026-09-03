@@ -18,6 +18,46 @@ import {
 import { Business, Service, Staff } from '../types';
 import WhatsAppHelper from '../components/WhatsAppHelper';
 import { formatDualDateFull, formatHijriAr } from '../lib/calendar';
+import {
+  generateSlotsForDate,
+  formatSlotLabel,
+  parseWeeklyHours,
+  DEFAULT_WEEKLY_HOURS,
+} from '../lib/workingHours';
+import { todayISOInDamascus } from '../lib/timezone';
+import {
+  parsePaymentSettings,
+  calcDepositAmount,
+  enabledMethods,
+  METHOD_LABELS_AR,
+  PaymentMethodId,
+} from '../lib/payments';
+
+function makeFallbackBusiness(slug: string): Business {
+  return {
+    id: 'demo_fallback',
+    slug: slug || 'demo',
+    name: 'متجر الحجوزات والخدمات المباشرة',
+    industry: 'custom',
+    template_id: 'universal-open',
+    phone: '+963991234567',
+    email: 'info@store.sa',
+    address: 'دمشق',
+    city: 'دمشق',
+    primary_color: '#0f172a',
+    secondary_color: '#d97706',
+    logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200&fit=crop',
+    cover_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop',
+    description: 'احجز موعدك بكل سهولة مع أفضل المختصين.',
+    trial_start: '',
+    trial_end: '',
+    subscription_status: 'trialing',
+    plan_name: 'Pro',
+    currency: 'SYP',
+    access_pin: '1234',
+    slot_interval_min: 30,
+  };
+}
 
 export default function PublicBookingPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -26,13 +66,14 @@ export default function PublicBookingPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Booking Flow Steps
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Service, 2: Staff, 3: Date/Time, 4: Customer Details / Success
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedTime, setSelectedTime] = useState<string>('17:00');
+  const [selectedDate, setSelectedDate] = useState<string>(todayISOInDamascus());
+  const [selectedTime, setSelectedTime] = useState<string>('');
 
   // Customer Details
   const [customerName, setCustomerName] = useState('');
@@ -46,67 +87,119 @@ export default function PublicBookingPage() {
   const [slotConflict, setSlotConflict] = useState(false);
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [bookingError, setBookingError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId | ''>('');
+  const [paymentRef, setPaymentRef] = useState('');
 
-  // Available TimeSlots
-  const timeSlots = [
-    '10:00 ص', '11:30 ص', '01:00 م', '03:30 م', '04:30 م', '05:30 م', '07:00 م', '08:30 م', '09:30 م'
-  ];
+  const weeklyHours = parseWeeklyHours(business?.working_hours) || DEFAULT_WEEKLY_HOURS;
+  const interval = business?.slot_interval_min || 30;
+  const timeSlots = generateSlotsForDate(selectedDate, weeklyHours, interval);
+  const paySettings = parsePaymentSettings(business?.payment_settings);
+  const depositAmt = selectedService ? calcDepositAmount(selectedService.price, paySettings) : 0;
+  const payMethods = enabledMethods(paySettings);
 
   useEffect(() => {
     const loadPublicStore = async () => {
-      if (!slug) return;
+      if (!slug) {
+        setBusiness(makeFallbackBusiness('demo'));
+        setLoading(false);
+        return;
+      }
       setLoading(true);
+      setLoadError('');
       try {
-        const resBiz = await fetch(apiUrl(`/api/businesses?slug=${slug}`));
-        const bizData = await resBiz.json();
+        const resBiz = await fetch(apiUrl(`/api/businesses?slug=${encodeURIComponent(slug)}`));
+        let bizData: any = null;
+        try {
+          bizData = await resBiz.json();
+        } catch {
+          bizData = null;
+        }
 
-        if (bizData && bizData.id) {
+        if (bizData && bizData.id && !bizData.error) {
           setBusiness(bizData);
 
           const [resServ, resStaff] = await Promise.all([
             fetch(apiUrl(`/api/services?business_id=${bizData.id}`)),
-            fetch(apiUrl(`/api/staff?business_id=${bizData.id}`))
+            fetch(apiUrl(`/api/staff?business_id=${bizData.id}`)),
           ]);
 
-          const dataServ = await resServ.json();
-          const dataStaff = await resStaff.json();
+          let dataServ: any = [];
+          let dataStaff: any = [];
+          try {
+            dataServ = await resServ.json();
+          } catch {
+            /* ignore */
+          }
+          try {
+            dataStaff = await resStaff.json();
+          } catch {
+            /* ignore */
+          }
 
           setServices(Array.isArray(dataServ) ? dataServ : []);
-          setStaff(Array.isArray(dataStaff) ? dataStaff : []);
+          setStaff(Array.isArray(dataStaff) ? dataStaff.filter((s: Staff) => s.is_active !== false) : []);
         } else {
-          // Fallback business
-          setBusiness({
-            id: 'demo_fallback',
-            slug: slug,
-            name: 'متجر الحجوزات والخدمات المباشرة',
-            industry: 'custom',
-            template_id: 'universal-open',
-            phone: '+966551234567',
-            email: 'info@store.sa',
-            address: 'طريق الملك فهد',
-            city: 'الرياض',
-            primary_color: '#0f172a',
-            secondary_color: '#d97706',
-            logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200&fit=crop',
-            cover_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&fit=crop',
-            description: 'احجز موعدك بكل سهولة مع أفضل المختصين.',
-            trial_start: '',
-            trial_end: '',
-            subscription_status: 'trialing',
-            plan_name: 'Pro'
-          });
-
+          // API down or missing business — always show a working demo page
+          if (bizData?.error) {
+            setLoadError('تعذر الاتصال بقاعدة البيانات — يتم عرض نسخة تجريبية');
+          }
+          setBusiness(makeFallbackBusiness(slug));
           setServices([
-            { id: 1, business_id: 'demo', title: 'حجز جلسة / خدمة احترافية', price: 150, duration_min: 60, category: 'عامة', currency: 'SAR', description: 'تأكيد فوري للحجز', image_url: '', location_type: 'branch' },
-            { id: 2, business_id: 'demo', title: 'استشارة أونلاين عبر الزوم', price: 200, duration_min: 45, category: 'أونلاين', currency: 'SAR', description: 'رابط الزوم يرسل بعد الحجز', image_url: '', location_type: 'online' }
+            {
+              id: 1,
+              business_id: 'demo',
+              title: 'حجز جلسة / خدمة احترافية',
+              price: 150,
+              duration_min: 60,
+              category: 'عامة',
+              currency: 'SYP',
+              description: 'تأكيد فوري للحجز',
+              image_url: '',
+              location_type: 'branch',
+            },
+            {
+              id: 2,
+              business_id: 'demo',
+              title: 'استشارة أونلاين عبر الزوم',
+              price: 200,
+              duration_min: 45,
+              category: 'أونلاين',
+              currency: 'SYP',
+              description: 'رابط الزوم يرسل بعد الحجز',
+              image_url: '',
+              location_type: 'online',
+            },
           ]);
-
           setStaff([
-            { id: 101, business_id: 'demo', name: 'أ. أحمد علي', role: 'مختص ومستشار الخدمة', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop', phone: '', is_active: true }
+            {
+              id: 101,
+              business_id: 'demo',
+              name: 'أ. أحمد علي',
+              role: 'مختص ومستشار الخدمة',
+              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop',
+              phone: '',
+              is_active: true,
+            },
           ]);
         }
       } catch (err) {
         console.error('Load public store error:', err);
+        setLoadError('حدث خطأ أثناء التحميل — يتم عرض نسخة تجريبية');
+        setBusiness(makeFallbackBusiness(slug || 'demo'));
+        setServices([
+          {
+            id: 1,
+            business_id: 'demo',
+            title: 'حجز جلسة / خدمة احترافية',
+            price: 150,
+            duration_min: 60,
+            category: 'عامة',
+            currency: 'SYP',
+            description: 'تأكيد فوري للحجز',
+            location_type: 'branch',
+          },
+        ]);
+        setStaff([]);
       } finally {
         setLoading(false);
       }
@@ -114,6 +207,18 @@ export default function PublicBookingPage() {
 
     loadPublicStore();
   }, [slug]);
+
+  // When date/hours change, pick first free slot
+  useEffect(() => {
+    if (timeSlots.length === 0) {
+      setSelectedTime('');
+      return;
+    }
+    if (!selectedTime || !timeSlots.includes(selectedTime)) {
+      const free = timeSlots.find((s) => !takenSlots.includes(s)) || timeSlots[0];
+      setSelectedTime(free);
+    }
+  }, [selectedDate, timeSlots.join(','), takenSlots.join(',')]);
 
   // Load taken slots when date or staff changes
   useEffect(() => {
@@ -166,8 +271,14 @@ export default function PublicBookingPage() {
           appointment_date: selectedDate,
           appointment_time: selectedTime,
           price: selectedService.price,
-          status: asWaitlist ? 'waitlist' : 'confirmed',
+          status: asWaitlist ? 'waitlist' : (paySettings.deposit_enabled && paymentMethod && paymentMethod !== 'pay_on_arrival' ? 'pending' : 'confirmed'),
           notes: notes,
+          deposit_amount: depositAmt,
+          payment_method: paymentMethod || '',
+          payment_status: !paySettings.deposit_enabled || paymentMethod === 'pay_on_arrival' || !paymentMethod
+            ? 'not_required'
+            : 'pending',
+          payment_ref: paymentRef || '',
         }),
       });
 
@@ -212,12 +323,26 @@ export default function PublicBookingPage() {
     );
   }
 
+  if (!business) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center dir-rtl px-4">
+        <p className="text-sm font-bold text-rose-300 mb-4">تعذر تحميل صفحة الحجز</p>
+        <Link to="/" className="text-amber-400 text-sm underline">العودة للرئيسية</Link>
+      </div>
+    );
+  }
+
   // Dynamic Theme Colors
-  const primaryColor = business?.primary_color || '#0f172a';
-  const secondaryColor = business?.secondary_color || '#d97706';
+  const primaryColor = business.primary_color || '#0f172a';
+  const secondaryColor = business.secondary_color || '#d97706';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans dir-rtl pb-20">
+      {loadError && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-200 text-[11px] text-center py-2 px-3">
+          {loadError}
+        </div>
+      )}
       
       {/* Branded Header Banner with Custom Theme Colors */}
       <div className="relative h-60 sm:h-72 overflow-hidden border-b border-slate-800">
@@ -328,7 +453,7 @@ export default function PublicBookingPage() {
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="font-black text-amber-400 text-lg">{service.price} {service.currency || business?.currency || 'SAR'}</span>
+                    <span className="font-black text-amber-400 text-lg">{service.price} {service.currency || business?.currency || 'SYP'}</span>
                     <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
                       <span>اختيار</span>
                       <ChevronRight className="w-4 h-4" />
@@ -392,7 +517,7 @@ export default function PublicBookingPage() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
                 <h2 className="font-bold text-lg text-white">اختر التاريخ والوقت وأدخل بياناتك</h2>
-                <p className="text-xs text-slate-400">الخدمة: {selectedService?.title} ({selectedService?.price} {selectedService?.currency || business?.currency || 'SAR'})</p>
+                <p className="text-xs text-slate-400">الخدمة: {selectedService?.title} ({selectedService?.price} {selectedService?.currency || business?.currency || 'SYP'})</p>
               </div>
               <button type="button" onClick={() => setStep(2)} className="text-xs text-slate-400 hover:text-white">تغيير</button>
             </div>
@@ -405,7 +530,7 @@ export default function PublicBookingPage() {
                   type="date"
                   required
                   value={selectedDate}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={todayISOInDamascus()}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
                 />
@@ -425,42 +550,48 @@ export default function PublicBookingPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-2">الوقت المتاح *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((slot) => {
-                    const isTaken = takenSlots.includes(slot);
-                    const isSelected = selectedTime === slot;
-                    return (
-                      <button
-                        type="button"
-                        key={slot}
-                        disabled={isTaken && !isSelected}
-                        onClick={() => {
-                          if (!isTaken) {
-                            setSelectedTime(slot);
-                            setSlotConflict(false);
-                            setBookingError('');
-                          }
-                        }}
-                        className={`py-2 rounded-xl text-xs font-bold transition relative ${
-                          isTaken
-                            ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed line-through'
-                            : isSelected
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
-                        }`}
-                        title={isTaken ? 'محجوز' : undefined}
-                      >
-                        {slot}
-                        {isTaken && (
-                          <span className="absolute -top-1.5 -left-1 text-[8px] bg-rose-500 text-white px-1 rounded font-bold no-underline">
-                            محجوز
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                {takenSlots.length > 0 && (
+                {timeSlots.length === 0 ? (
+                  <div className="px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                    هذا اليوم مغلق حسب ساعات العمل. اختر يوماً آخر.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    {timeSlots.map((slot) => {
+                      const isTaken = takenSlots.includes(slot);
+                      const isSelected = selectedTime === slot;
+                      return (
+                        <button
+                          type="button"
+                          key={slot}
+                          disabled={isTaken && !isSelected}
+                          onClick={() => {
+                            if (!isTaken) {
+                              setSelectedTime(slot);
+                              setSlotConflict(false);
+                              setBookingError('');
+                            }
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold transition relative ${
+                            isTaken
+                              ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed line-through'
+                              : isSelected
+                                ? 'bg-amber-500 text-slate-950'
+                                : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                          }`}
+                          title={isTaken ? 'محجوز' : undefined}
+                        >
+                          {formatSlotLabel(slot)}
+                          {isTaken && (
+                            <span className="absolute -top-1.5 -left-1 text-[8px] bg-rose-500 text-white px-1 rounded font-bold no-underline">
+                              محجوز
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {takenSlots.length > 0 && timeSlots.length > 0 && (
                   <p className="text-[10px] text-slate-500 mt-2">الأوقات المشطوبة محجوزة مسبقاً</p>
                 )}
               </div>
@@ -525,6 +656,59 @@ export default function PublicBookingPage() {
               </div>
             </div>
 
+
+            {/* Optional deposit / payment */}
+            {paySettings.deposit_enabled && depositAmt > 0 && (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-amber-300">عربون مطلوب لتأكيد الحجز</span>
+                  <span className="font-black text-white text-sm">
+                    {depositAmt} {paySettings.currency || business?.currency || 'SYP'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {payMethods.map((m) => (
+                    <label
+                      key={m.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                        paymentMethod === m.id
+                          ? 'border-amber-500 bg-amber-500/10'
+                          : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payMethod"
+                        className="mt-1"
+                        checked={paymentMethod === m.id}
+                        onChange={() => setPaymentMethod(m.id)}
+                      />
+                      <div className="text-xs">
+                        <div className="font-bold text-white">
+                          {m.label || METHOD_LABELS_AR[m.id]}
+                        </div>
+                        {m.account && m.id !== 'pay_on_arrival' && (
+                          <div className="text-slate-400 mt-1 font-mono dir-ltr text-right">{m.account}</div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {paymentMethod && paymentMethod !== 'pay_on_arrival' && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">رقم العملية / ملاحظة (اختياري)</label>
+                    <input
+                      type="text"
+                      value={paymentRef}
+                      onChange={(e) => setPaymentRef(e.target.value)}
+                      placeholder="رقم التحويل أو ملاحظة"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={submitting || takenSlots.includes(selectedTime)}
@@ -584,7 +768,7 @@ export default function PublicBookingPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">الإجمالي:</span>
-                <strong className="text-amber-400 font-bold text-sm">{confirmedBooking.price} {business?.currency || 'SAR'}</strong>
+                <strong className="text-amber-400 font-bold text-sm">{confirmedBooking.price} {business?.currency || 'SYP'}</strong>
               </div>
             </div>
 
