@@ -1,73 +1,60 @@
-# React + TypeScript + Vite
+[README.md](https://github.com/user-attachments/files/31797100/README.md)
+# مواعيد — Mawa'eed SaaS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+منصة عربية لإنشاء مواقع حجز المواعيد (صالونات، عيادات، خدمات...).
 
-Currently, two official plugins are available:
+## المميزات الحالية
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- صفحة هبوط + معالج إنشاء متجر
+- صفحة حجز عامة للعملاء `/b/:slug`
+- لوحة تاجر `/merchant/:slug` (دخول بـ PIN — الافتراضي `1234`)
+- واتساب: تأكيد + تذكير + نسخ الرسالة
+- تقويم ميلادي + هجري
+- منع تعارض المواعيد + قائمة انتظار
+- ساعات عمل أسبوعية تولّد الأوقات تلقائياً
+- تخزين محلي (ملف JSON) — **بدون Supabase**
 
-## React Compiler
+## التشغيل المحلي
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run build
+npm start
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+أو للتطوير:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+يفتح السيرفر على المنفذ `PORT` أو 3000.
+
+## النشر على Railway
+
+1. اربط المستودع
+2. أمر البناء: `npm run build`
+3. أمر التشغيل: `npm start`
+4. لا حاجة لمتغيرات Supabase
+
+## روابط تجريبية بعد النشر
+
+- الرئيسية: `/`
+- حجز: `/b/salon-luxe`
+- تاجر: `/merchant/salon-luxe` → PIN: `1234`
+- تتبع حجز: `/track`
+
+## ملاحظات
+
+- البيانات تُحفظ في `data/db.json` على السيرفر
+- عند إعادة نشر كاملة قد تُصفَّر البيانات (طبيعي بدون DB خارجية)
+- لتغيير PIN لاحقاً: عدّل `access_pin` من لوحة التاجر أو في ملف البيانات
+
+## سوريا — الدفع والتوقيت
+
+- المنطقة الزمنية الافتراضية: **Asia/Damascus**
+- العملة التجريبية: **SYP**
+- العربون **اختياري** من لوحة التاجر → تبويب «الدفع والعربون»
+- وسائل: دفع عند الحضور، سيريتل كاش، MTN كاش، شام كاش، تحويل بنكي
+
+لا تعتمد على الملفات الجزئية السابقة — استخدم أرشيف **FINAL-ALL** فقط.
