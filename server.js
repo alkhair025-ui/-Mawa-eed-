@@ -6,6 +6,7 @@ import servicesHandler from './api/services.js';
 import staffHandler from './api/staff.js';
 import appointmentsHandler from './api/appointments.js';
 import statsHandler from './api/stats.js';
+import ledgerHandler from './api/ledger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,7 @@ app.all('/api/services', servicesHandler);
 app.all('/api/staff', staffHandler);
 app.all('/api/appointments', appointmentsHandler);
 app.all('/api/stats', statsHandler);
+app.all('/api/ledger', ledgerHandler);
 
 // --- Static production build ---
 const distPath = path.join(__dirname, 'dist');
