@@ -22,7 +22,7 @@ import {
   Eye,
   Check
 } from 'lucide-react';
-import { Business, Service, Staff, Appointment, TemplateConfig } from '../types';
+import { Business, Service, Staff, Appointment, TemplateConfig, LedgerEntry } from '../types';
 import { TEMPLATES } from '../data/initialData';
 import { CURRENCIES } from '../data/currencies';
 import TrialBanner from '../components/TrialBanner';
@@ -31,6 +31,28 @@ import WhatsAppHelper from '../components/WhatsAppHelper';
 import TemplateImportExportModal from '../components/TemplateImportExportModal';
 import Navbar from '../components/Navbar';
 import { formatHijriAr } from '../lib/calendar';
+import {
+  getStoredSession,
+  setSession,
+  clearSession,
+  verifyPin,
+  DEFAULT_MERCHANT_PIN,
+} from '../lib/merchantAuth';
+import {
+  parseWeeklyHours,
+  DEFAULT_WEEKLY_HOURS,
+  DAY_NAMES_AR,
+  DayKey,
+  WeeklyHours,
+} from '../lib/workingHours';
+import {
+  parsePaymentSettings,
+  DEFAULT_PAYMENT_SETTINGS,
+  METHOD_LABELS_AR,
+  PaymentSettings,
+  PaymentMethodId,
+} from '../lib/payments';
+import { todayISOInDamascus } from '../lib/timezone';
 
 export default function MerchantDashboard() {
   const { slug } = useParams<{ slug: string }>();
@@ -41,8 +63,26 @@ export default function MerchantDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [stats, setStats] = useState<any>(null);
 
-  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments' | 'services' | 'staff' | 'branding' | 'trial'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments' | 'services' | 'staff' | 'hours' | 'payments' | 'accounts' | 'accounting' | 'branding' | 'trial'>('calendar');
   const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [weeklyHours, setWeeklyHours] = useState<WeeklyHours>(DEFAULT_WEEKLY_HOURS);
+  const [savingHours, setSavingHours] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [pinSaveMsg, setPinSaveMsg] = useState('');
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [savingPayments, setSavingPayments] = useState(false);
+  const [accountsFilter, setAccountsFilter] = useState<'all' | 'pending' | 'paid' | 'not_required'>('all');
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [ledgerType, setLedgerType] = useState<'income' | 'expense'>('expense');
+  const [ledgerTitle, setLedgerTitle] = useState('');
+  const [ledgerAmount, setLedgerAmount] = useState('');
+  const [ledgerCategory, setLedgerCategory] = useState('عام');
+  const [ledgerDate, setLedgerDate] = useState(todayISOInDamascus());
+  const [ledgerNotes, setLedgerNotes] = useState('');
+  const [savingLedger, setSavingLedger] = useState(false);
 
   // Modals & Forms
   const [showQRModal, setShowQRModal] = useState(false);
@@ -69,7 +109,7 @@ export default function MerchantDashboard() {
   const [manualCustomerPhone, setManualCustomerPhone] = useState('');
   const [manualServiceId, setManualServiceId] = useState<number | null>(null);
   const [manualStaffName, setManualStaffName] = useState('');
-  const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
+  const [manualDate, setManualDate] = useState(todayISOInDamascus());
   const [manualTime, setManualTime] = useState('16:00');
 
   // Preset Color Palette Swatches for quick 1-click theme customization
@@ -112,14 +152,29 @@ export default function MerchantDashboard() {
           trial_start: new Date().toISOString(),
           trial_end: new Date(Date.now() + 6 * 86400000).toISOString(),
           subscription_status: 'trialing',
-          plan_name: 'التجربة المجانية (7 أيام)'
+          plan_name: 'التجربة المجانية (7 أيام)',
+          access_pin: '1234',
         });
+        if (slug && getStoredSession(slug)) setAuthenticated(true);
         setLoading(false);
         return;
       }
 
       setBusiness(bizData);
       if (bizData.currency) setNewServiceCurrency(bizData.currency);
+      if (bizData.working_hours) {
+        setWeeklyHours(parseWeeklyHours(bizData.working_hours));
+      }
+      if (bizData.payment_settings) {
+        setPaymentSettings(parsePaymentSettings(bizData.payment_settings));
+      }
+      if (bizData.currency) {
+        setPaymentSettings((prev) => ({ ...prev, currency: bizData.currency || prev.currency }));
+      }
+      // Auth: restore session for this slug
+      if (slug && getStoredSession(slug)) {
+        setAuthenticated(true);
+      }
 
       // Fetch Services, Staff, Appointments
       const [resServ, resStaff, resApp, resStats] = await Promise.all([
@@ -137,6 +192,13 @@ export default function MerchantDashboard() {
       setServices(Array.isArray(dataServ) ? dataServ : []);
       setStaff(Array.isArray(dataStaff) ? dataStaff : []);
       setAppointments(Array.isArray(dataApp) ? dataApp : []);
+      try {
+        const resLed = await fetch(apiUrl(`/api/ledger?business_id=${bizData.id}`));
+        const ledData = await resLed.json();
+        setLedgerEntries(Array.isArray(ledData) ? ledData : []);
+      } catch {
+        setLedgerEntries([]);
+      }
       setStats(dataStats);
 
     } catch (err) {
@@ -149,6 +211,63 @@ export default function MerchantDashboard() {
   useEffect(() => {
     loadData();
   }, [slug]);
+
+  const handleToggleAccounting = async (enabled: boolean) => {
+    if (!business?.id) return;
+    try {
+      await fetch(apiUrl('/api/businesses'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: business.id, accounting_enabled: enabled }),
+      });
+      setBusiness({ ...business, accounting_enabled: enabled });
+      if (!enabled && activeTab === 'accounting') setActiveTab('calendar');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddLedger = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business?.id || !ledgerTitle || !ledgerAmount) return;
+    setSavingLedger(true);
+    try {
+      await fetch(apiUrl('/api/ledger'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_id: business.id,
+          type: ledgerType,
+          title: ledgerTitle,
+          amount: Number(ledgerAmount),
+          category: ledgerCategory,
+          date: ledgerDate,
+          notes: ledgerNotes,
+          currency: business.currency || 'SYP',
+        }),
+      });
+      setLedgerTitle('');
+      setLedgerAmount('');
+      setLedgerNotes('');
+      const resLed = await fetch(apiUrl(`/api/ledger?business_id=${business.id}`));
+      const ledData = await resLed.json();
+      setLedgerEntries(Array.isArray(ledData) ? ledData : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingLedger(false);
+    }
+  };
+
+  const handleDeleteLedger = async (id: number) => {
+    if (!confirm('حذف هذا القيد؟')) return;
+    await fetch(apiUrl('/api/ledger'), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    setLedgerEntries((prev) => prev.filter((x) => x.id !== id));
+  };
 
   // Status Change Handler
   const handleUpdateStatus = async (appointmentId: number, newStatus: string) => {
@@ -164,6 +283,31 @@ export default function MerchantDashboard() {
     }
   };
 
+  const handleUpdatePayment = async (
+    appointmentId: number,
+    payment_status: string,
+    extra?: { status?: string }
+  ) => {
+    try {
+      const body: Record<string, unknown> = { id: appointmentId, payment_status };
+      // عند تأكيد الدفع، نؤكد الموعد أيضاً إن كان معلقاً
+      if (payment_status === 'paid' && extra?.status) {
+        body.status = extra.status;
+      }
+      if (payment_status === 'paid') {
+        body.status = 'confirmed';
+      }
+      await fetch(apiUrl('/api/appointments'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      loadData();
+    } catch (err) {
+      console.error('Update payment error:', err);
+    }
+  };
+
   // Add Service Handler
   const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,7 +320,7 @@ export default function MerchantDashboard() {
           business_id: business.id,
           title: newServiceTitle,
           price: Number(newServicePrice),
-          currency: newServiceCurrency || 'SAR',
+          currency: newServiceCurrency || 'SYP',
           duration_min: Number(newServiceDuration),
           category: newServiceCategory || 'خدمة عامة',
           location_type: newServiceLocationType,
@@ -249,11 +393,101 @@ export default function MerchantDashboard() {
     }
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!slug) return;
+    if (verifyPin(pinInput, business?.access_pin)) {
+      setSession(slug);
+      setAuthenticated(true);
+      setPinError('');
+      setPinInput('');
+    } else {
+      setPinError('رمز الدخول غير صحيح');
+    }
+  };
+
+  const handleLogout = () => {
+    if (slug) clearSession(slug);
+    setAuthenticated(false);
+  };
+
+  const saveWorkingHours = async () => {
+    if (!business?.id || business.id === 'biz_salon_luxe' || business.id === 'demo_fallback') {
+      // demo mode — keep local only
+      setBusiness({ ...business!, working_hours: weeklyHours as any });
+      alert('تم حفظ ساعات العمل محلياً (وضع تجريبي)');
+      return;
+    }
+    setSavingHours(true);
+    try {
+      await fetch(apiUrl('/api/businesses'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: business.id,
+          working_hours: JSON.stringify(weeklyHours),
+        }),
+      });
+      setBusiness({ ...business, working_hours: JSON.stringify(weeklyHours) });
+      alert('تم حفظ ساعات العمل');
+    } catch (err) {
+      console.error(err);
+      alert('تعذر الحفظ — تأكد من إعداد قاعدة البيانات');
+    } finally {
+      setSavingHours(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center dir-rtl">
         <Sparkles className="w-10 h-10 text-amber-400 animate-spin mb-4" />
         <p className="text-sm font-bold text-slate-300">جاري تحميل لوحة تحكم متجرك...</p>
+      </div>
+    );
+  }
+
+  // --- Login gate ---
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans dir-rtl">
+        <Navbar />
+        <div className="max-w-md mx-auto px-4 pt-16">
+          <div className="bg-slate-900 rounded-3xl border border-slate-800 p-8 shadow-xl">
+            <h1 className="text-xl font-black text-white text-center mb-1">دخول لوحة التاجر</h1>
+            <p className="text-xs text-slate-400 text-center mb-6">
+              {business?.name || slug}
+            </p>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">رمز الدخول (PIN)</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="current-password"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  placeholder="••••"
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-center text-lg tracking-widest font-mono"
+                />
+              </div>
+              {pinError && (
+                <p className="text-xs text-rose-400 text-center">{pinError}</p>
+              )}
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition"
+              >
+                دخول
+              </button>
+            </form>
+            <p className="text-[10px] text-slate-500 text-center mt-5 leading-relaxed">
+              الرمز الافتراضي للتجربة: <span className="text-amber-400 font-mono">{DEFAULT_MERCHANT_PIN}</span>
+              <br />
+              يمكنك تغييره لاحقاً من إعدادات المتجر.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -343,7 +577,7 @@ export default function MerchantDashboard() {
               <span>الإيرادات التقديرية</span>
               <DollarSign className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-black text-amber-400">{stats?.totalRevenue || 0} <span className="text-xs font-normal">{business?.currency || 'SAR'}</span></div>
+            <div className="text-2xl font-black text-amber-400">{stats?.totalRevenue || 0} <span className="text-xs font-normal">{business?.currency || 'SYP'}</span></div>
             <div className="text-[11px] text-slate-400 mt-1">من الحجوزات المؤكدة والمكتملة</div>
           </div>
 
@@ -406,6 +640,41 @@ export default function MerchantDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('hours')}
+            className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'hours' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>ساعات العمل</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'payments' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>إعدادات الدفع</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'accounts' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>الحسابات والمدفوعات</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('accounting')}
+            className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'accounting' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>محاسبة مصغّرة</span>
+            {!business?.accounting_enabled && (
+              <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">اختياري</span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('branding')}
             className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 ${activeTab === 'branding' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
           >
@@ -419,6 +688,14 @@ export default function MerchantDashboard() {
           >
             <Sparkles className="w-4 h-4" />
             <span>الاشتراك والتجربة</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="px-4 py-2.5 rounded-xl transition flex items-center gap-2 shrink-0 bg-slate-900 text-rose-400 hover:bg-slate-800 border border-slate-800 mr-auto"
+          >
+            <span>خروج</span>
           </button>
         </div>
 
@@ -549,7 +826,7 @@ export default function MerchantDashboard() {
                         <span className="block text-white text-xs">{app.appointment_date} • {app.appointment_time}</span>
                         <span className="block text-[10px] text-amber-400/80 mt-0.5">{formatHijriAr(app.appointment_date)}</span>
                       </td>
-                      <td className="py-3.5 px-2 font-bold text-amber-300">{app.price} {business?.currency || 'SAR'}</td>
+                      <td className="py-3.5 px-2 font-bold text-amber-300">{app.price} {business?.currency || 'SYP'}</td>
                       <td className="py-3.5 px-2">
                         <select
                           value={app.status}
@@ -658,7 +935,7 @@ export default function MerchantDashboard() {
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="font-black text-amber-400 text-base">{serv.price} {serv.currency || business?.currency || 'SAR'}</span>
+                    <span className="font-black text-amber-400 text-base">{serv.price} {serv.currency || business?.currency || 'SYP'}</span>
                     <button
                       onClick={async () => {
                         if (confirm('هل أنت تأكد من حذف هذه الخدمة؟')) {
@@ -678,6 +955,122 @@ export default function MerchantDashboard() {
         )}
 
         {/* TAB 4: STAFF & TEAM */}
+        {activeTab === 'hours' && (
+          <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h3 className="font-bold text-lg text-white">ساعات العمل الأسبوعية</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  تُستخدم لتوليد أوقات الحجز المتاحة للعملاء تلقائياً
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={saveWorkingHours}
+                disabled={savingHours}
+                className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition"
+              >
+                {savingHours ? 'جاري الحفظ...' : 'حفظ الساعات'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(Object.keys(DAY_NAMES_AR) as DayKey[]).map((day) => (
+                <div
+                  key={day}
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-2xl bg-slate-950 border border-slate-800"
+                >
+                  <label className="flex items-center gap-2 min-w-[120px] text-sm font-bold text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={weeklyHours[day].open}
+                      onChange={(e) =>
+                        setWeeklyHours((prev) => ({
+                          ...prev,
+                          [day]: { ...prev[day], open: e.target.checked },
+                        }))
+                      }
+                      className="rounded border-slate-600"
+                    />
+                    {DAY_NAMES_AR[day]}
+                  </label>
+                  {weeklyHours[day].open ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="time"
+                        value={weeklyHours[day].start}
+                        onChange={(e) =>
+                          setWeeklyHours((prev) => ({
+                            ...prev,
+                            [day]: { ...prev[day], start: e.target.value },
+                          }))
+                        }
+                        className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs"
+                      />
+                      <span className="text-slate-500 text-xs">إلى</span>
+                      <input
+                        type="time"
+                        value={weeklyHours[day].end}
+                        onChange={(e) =>
+                          setWeeklyHours((prev) => ({
+                            ...prev,
+                            [day]: { ...prev[day], end: e.target.value },
+                          }))
+                        }
+                        className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs"
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500">مغلق</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Change dashboard PIN */}
+            <div className="mt-8 pt-6 border-t border-slate-800">
+              <h4 className="font-bold text-sm text-white mb-2">تغيير رمز دخول اللوحة (PIN)</h4>
+              <p className="text-[11px] text-slate-500 mb-3">الافتراضي حالياً: 1234 — غيّره لحماية متجرك</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="رمز جديد (4 أرقام على الأقل)"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value)}
+                  className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (newPin.trim().length < 4) {
+                      setPinSaveMsg('الرمز يجب أن يكون 4 خانات على الأقل');
+                      return;
+                    }
+                    if (!business?.id) return;
+                    try {
+                      await fetch(apiUrl('/api/businesses'), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: business.id, access_pin: newPin.trim() }),
+                      });
+                      setBusiness({ ...business, access_pin: newPin.trim() });
+                      setPinSaveMsg('تم تحديث الرمز بنجاح');
+                      setNewPin('');
+                    } catch {
+                      setPinSaveMsg('تعذر الحفظ');
+                    }
+                  }}
+                  className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition"
+                >
+                  حفظ الرمز
+                </button>
+              </div>
+              {pinSaveMsg && <p className="text-[11px] text-amber-400 mt-2">{pinSaveMsg}</p>}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'staff' && (
           <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800">
             <div className="flex items-center justify-between mb-6">
@@ -790,7 +1183,7 @@ export default function MerchantDashboard() {
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-2">العملة الافتراضية</label>
                     <select
-                      value={business?.currency || 'SAR'}
+                      value={business?.currency || 'SYP'}
                       onChange={(e) => setBusiness(business ? { ...business, currency: e.target.value } : null)}
                       className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                     >
@@ -955,7 +1348,7 @@ export default function MerchantDashboard() {
                         <div className="font-bold text-white text-xs">{services[0]?.title || 'خدمة حجز أونلاين'}</div>
                         <div className="text-[10px] text-slate-400">45 دقيقة</div>
                       </div>
-                      <div className="font-bold text-amber-400">{services[0]?.price || 150} {business?.currency || 'SAR'}</div>
+                      <div className="font-bold text-amber-400">{services[0]?.price || 150} {business?.currency || 'SYP'}</div>
                     </div>
 
                     <button className="w-full py-2 bg-amber-500 text-slate-950 font-black rounded-lg text-xs mt-2">
