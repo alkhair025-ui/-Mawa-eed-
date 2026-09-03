@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getAll, findOne, insert, update, remove } from './store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,40 +9,15 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const { slug, id } = req.query;
-      
-      if (slug) {
-        const { data, error } = await supabase
-          .from('businesses')
-          .select('*')
-          .eq('slug', slug)
-          .maybeSingle();
-        if (error) throw error;
-        return res.status(200).json(data);
-      }
-
-      if (id) {
-        const { data, error } = await supabase
-          .from('businesses')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
-        if (error) throw error;
-        return res.status(200).json(data);
-      }
-
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return res.status(200).json(data);
+      if (slug) return res.status(200).json(findOne('businesses', (b) => b.slug === slug));
+      if (id) return res.status(200).json(findOne('businesses', (b) => String(b.id) === String(id)));
+      return res.status(200).json(getAll('businesses'));
     }
 
     if (req.method === 'POST') {
-      const payload = req.body;
+      const payload = req.body || {};
       const now = new Date();
-      const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days trial
-
+      const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       const newBusiness = {
         id: payload.id || 'biz_' + Date.now().toString(36),
         slug: payload.slug || 'store-' + Math.floor(1000 + Math.random() * 9000),
@@ -58,48 +33,32 @@ export default async function handler(req, res) {
         primary_color: payload.primary_color || '#0f172a',
         secondary_color: payload.secondary_color || '#3b82f6',
         description: payload.description || 'منصة حجز المواعيد الأسهل والأسرع للعملاء.',
+        currency: payload.currency || 'SAR',
         trial_start: now.toISOString(),
         trial_end: trialEnd.toISOString(),
         subscription_status: 'trialing',
         plan_name: 'التجربة المجانية (7 أيام)',
-        created_at: now.toISOString()
+        access_pin: payload.access_pin || '1234',
+        slot_interval_min: payload.slot_interval_min || 30,
+        working_hours: payload.working_hours || null,
+        created_at: now.toISOString(),
       };
-
-      const { data, error } = await supabase
-        .from('businesses')
-        .insert(newBusiness)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(201).json(data);
+      insert('businesses', newBusiness);
+      return res.status(201).json(newBusiness);
     }
 
     if (req.method === 'PUT') {
-      const { id, ...updates } = req.body;
+      const { id, ...updates } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing business id' });
-
-      const { data, error } = await supabase
-        .from('businesses')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = update('businesses', id, updates);
+      if (!data) return res.status(404).json({ error: 'Business not found' });
       return res.status(200).json(data);
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.body;
+      const { id } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Missing business id' });
-
-      const { error } = await supabase
-        .from('businesses')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      remove('businesses', id);
       return res.status(200).json({ ok: true });
     }
 
